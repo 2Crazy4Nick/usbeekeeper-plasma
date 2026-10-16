@@ -1,11 +1,12 @@
 add_library(whatcable-plasmoid-plugin SHARED
     plugin/WhatCablePlugin.cpp
     plugin/DeviceModel.cpp
+    plugin/UsbeehiveClient.cpp
 )
 
 target_link_libraries(whatcable-plasmoid-plugin PRIVATE
-    whatcablecore
     Qt6::Core
+    Qt6::DBus
     Qt6::Quick
 )
 

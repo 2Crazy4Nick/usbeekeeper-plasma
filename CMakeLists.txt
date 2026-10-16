@@ -23,10 +23,10 @@ add_subdirectory(src/cli)
 
 # Plasmoid requires KDE Frameworks 6
 if(ECM_FOUND)
-    find_package(Qt6 COMPONENTS Quick Qml)
+    find_package(Qt6 COMPONENTS DBus Quick Qml)
     find_package(KF6 COMPONENTS I18n CoreAddons Package)
     find_package(Plasma)
-    if(Qt6Quick_FOUND AND KF6Package_FOUND AND Plasma_FOUND)
+    if(Qt6DBus_FOUND AND Qt6Quick_FOUND AND KF6Package_FOUND AND Plasma_FOUND)
         add_subdirectory(src/plasmoid)
         message(STATUS "KDE Plasma 6 found — Plasmoid will be built")
     else()

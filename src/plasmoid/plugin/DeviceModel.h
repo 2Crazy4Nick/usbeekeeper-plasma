@@ -1,9 +1,9 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QJsonArray>
 #include <QList>
-#include "DeviceManager.h"
-#include "DeviceSummary.h"
+#include "UsbeehiveClient.h"
 
 namespace WhatCable {
 
@@ -73,10 +73,24 @@ signals:
     void showEmptyPortsChanged();
 
 private:
+    struct Device {
+        QString headline, subtitle, icon, category, busPort;
+        QStringList bullets;
+        int status = 0, speed = 0, maxPower = 0, portNumber = -1, cableMaxWatts = 0, maxSourcePower = 0;
+        QString vendorId, productId, speedLabel, usbVersion, dataRole, powerRole;
+        QString cableSpeed, cableCurrent, cableType, cableVendor;
+        bool isHub = false, isConnected = false, hasPowerDelivery = false;
+        QJsonArray sourcePdos;
+        bool hasChargingDiag = false, chargingIsWarning = false;
+        QString chargingSummary, chargingDetail;
+    };
+
+    void loadSnapshot(const QString &json);
     void rebuildFiltered();
 
-    DeviceManager m_manager;
-    QList<DeviceSummary> m_filtered;
+    UsbeehiveClient m_client;
+    QList<Device> m_devices;
+    QList<Device> m_filtered;
     bool m_showHubs = false;
     bool m_showEmptyPorts = false;
 };
