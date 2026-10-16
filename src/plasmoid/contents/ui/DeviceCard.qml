@@ -29,9 +29,12 @@ ColumnLayout {
                 id: topologyGuides
                 Layout.fillHeight: true
                 Layout.preferredWidth: card.topologyTreeActive
-                    ? (model.topologyDepth || 0) * card.treeIndentStep : 0
-                property var ancestorLastFlags: model.topologyAncestorLastFlags || []
-                property int depth: model.topologyDepth || 0
+                    ? (model.presentationTreeDepth || 0) * card.treeIndentStep : 0
+                property var ancestorLastFlags: card.topologyTreeActive
+                    ? (model.presentationTreeAncestorLastFlags || [])
+                    : (model.topologyAncestorLastFlags || [])
+                property int depth: card.topologyTreeActive
+                    ? (model.presentationTreeDepth || 0) : (model.topologyDepth || 0)
 
                 Repeater {
                     model: card.topologyTreeActive ? topologyGuides.depth : 0
@@ -100,14 +103,33 @@ ColumnLayout {
                     spacing: 0
 
                     PlasmaComponents.Label {
-                        text: model.displayName || model.headline || ""
+                        text: (card.topologyTreeActive
+                               && model.physicalRelationshipType === "root"
+                               && (model.physicalName || "").length > 0)
+                            ? model.physicalName
+                            : (model.displayName || model.headline || "")
                         font.bold: true
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
 
                     PlasmaComponents.Label {
-                        text: model.isCompanionHubGroup ? (model.subtitle || "") : (model.displayVendor || model.subtitle || "")
+                        text: {
+                            if (card.topologyTreeActive && model.physicalRelationshipType === "root"
+                                    && (model.physicalName || "").length > 0) {
+                                var logical = model.displayName || ""
+                                var vendor = model.displayVendor || ""
+                                var transport = model.isCompanionHubGroup ? "USB 2 + USB 3" : ""
+                                var result = vendor
+                                if (logical.length > 0) result += (result.length > 0 ? " · " : "") + logical
+                                if (transport.length > 0) result += (result.length > 0 ? " · " : "") + transport
+                                return result
+                            }
+                            var subtitle = model.isCompanionHubGroup ? (model.subtitle || "") : (model.displayVendor || model.subtitle || "")
+                            if (model.physicalRelationshipType === "integrated_function")
+                                subtitle += (subtitle.length > 0 ? " · " : "") + "Integrated"
+                            return subtitle
+                        }
                         opacity: 0.7
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         elide: Text.ElideRight
@@ -209,6 +231,15 @@ ColumnLayout {
                 visible: card.expanded
                 spacing: 2
 
+                PlasmaComponents.Label {
+                    text: "Integrated USB function of the parent physical device"
+                    visible: model.physicalRelationshipType === "integrated_function"
+                    opacity: 0.7
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+
                 Repeater {
                     model: model.details || []
 
@@ -217,7 +248,10 @@ ColumnLayout {
                         spacing: Kirigami.Units.smallSpacing
 
                         PlasmaComponents.Label {
-                            text: modelData.label + ":"
+                            text: (model.physicalRelationshipType === "integrated_function"
+                                   && modelData.label === "Port")
+                                ? "Logical downstream port:"
+                                : modelData.label + ":"
                             opacity: 0.5
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             Layout.preferredWidth: Kirigami.Units.gridUnit * 7
@@ -239,6 +273,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 visible: card.expanded && (model.physicalInstanceKey || "").length > 0
                          && !(model.physicalAliasIdentityAmbiguous || false)
+                         && ((model.physicalRelationshipType || "").length === 0
+                             || model.physicalRelationshipType === "root")
                 spacing: 2
 
                 PlasmaComponents.Label {

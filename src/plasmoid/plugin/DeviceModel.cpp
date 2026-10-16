@@ -662,50 +662,6 @@ void DeviceModel::resolveTopology()
         if (device.topologyResolved) device.topologyDepth = depth;
     }
 
-    if (m_showHubs && m_showTopologyTree) {
-        QHash<QString, QList<int>> childrenByParent;
-        QList<int> roots;
-        for (int i = 0; i < m_filtered.size(); ++i) {
-            const auto &device = m_filtered.at(i);
-            const auto parentOwners = idOwners.value(device.topologyParentId);
-            if (device.topologyResolved && !device.topologyParentId.isEmpty()
-                && parentOwners.size() == 1 && m_filtered.at(parentOwners.first()).topologyResolved)
-                childrenByParent[device.topologyParentId].append(i);
-            else
-                roots.append(i);
-        }
-
-        auto sortSiblings = [this](QList<int> &siblings) {
-            std::stable_sort(siblings.begin(), siblings.end(), [this](int left, int right) {
-                bool leftOk = false;
-                bool rightOk = false;
-                const int leftPort = m_filtered.at(left).topologyPort.toInt(&leftOk);
-                const int rightPort = m_filtered.at(right).topologyPort.toInt(&rightOk);
-                return leftOk && rightOk && leftPort != rightPort && leftPort < rightPort;
-            });
-        };
-        sortSiblings(roots);
-        for (auto it = childrenByParent.begin(); it != childrenByParent.end(); ++it)
-            sortSiblings(it.value());
-
-        QList<int> ordered;
-        QSet<int> visited;
-        std::function<void(int)> appendSubtree = [&](int index) {
-            if (visited.contains(index)) return;
-            visited.insert(index);
-            ordered.append(index);
-            const auto children = childrenByParent.value(m_filtered.at(index).topologyId);
-            for (const auto child : children) appendSubtree(child);
-        };
-        for (const auto root : roots) appendSubtree(root);
-        for (int i = 0; i < m_filtered.size(); ++i) appendSubtree(i);
-
-        QList<Device> reordered;
-        reordered.reserve(m_filtered.size());
-        for (const auto index : ordered) reordered.append(m_filtered.at(index));
-        m_filtered = reordered;
-    }
-
     QHash<QString, QList<int>> childrenByParent;
     QHash<QString, int> idToIndex;
     QList<int> roots;
@@ -756,6 +712,148 @@ void DeviceModel::resolveTopology()
     }
     resolvePhysicalProfiles();
     resolvePhysicalInstances();
+    if (m_showHubs && m_showTopologyTree)
+        resolvePresentationTree();
+}
+
+void DeviceModel::resolvePresentationTree()
+{
+    QHash<QString, int> idToIndex;
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        device.presentationTreeParentId.clear();
+        device.presentationTreePort.clear();
+        device.presentationTreeDepth = 0;
+        device.presentationTreeHasChildren = false;
+        device.presentationTreeIsLastChild = false;
+        device.presentationTreeAncestorLastFlags.clear();
+        idToIndex.insert(device.topologyId, i);
+    }
+
+    QList<int> visible;
+    QSet<int> visibleSet;
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        visible.append(i);
+        visibleSet.insert(i);
+    }
+
+    QHash<QString, QList<int>> childrenByParent;
+    QList<int> roots;
+    for (const auto index : visible) {
+        auto &device = m_filtered[index];
+        QString candidate = device.topologyParentId;
+        QString directParent = candidate;
+        QSet<QString> seen;
+        bool attached = false;
+        while (!candidate.isEmpty() && !seen.contains(candidate)) {
+            seen.insert(candidate);
+            const auto parentIndex = idToIndex.value(candidate, -1);
+            if (parentIndex < 0 || !visibleSet.contains(parentIndex)) {
+                if (parentIndex < 0) candidate.clear();
+                else candidate = m_filtered.at(parentIndex).topologyParentId;
+                continue;
+            }
+            device.presentationTreeParentId = candidate;
+            if (candidate == directParent)
+                device.presentationTreePort = device.topologyPort;
+            attached = true;
+            break;
+        }
+        if (!attached)
+            roots.append(index);
+        else
+            childrenByParent[device.presentationTreeParentId].append(index);
+    }
+
+    auto sortSiblings = [this](QList<int> &siblings) {
+        std::stable_sort(siblings.begin(), siblings.end(), [this](int left, int right) {
+            bool leftOk = false;
+            bool rightOk = false;
+            const int leftPort = m_filtered.at(left).topologyPort.toInt(&leftOk);
+            const int rightPort = m_filtered.at(right).topologyPort.toInt(&rightOk);
+            return leftOk && rightOk && leftPort != rightPort && leftPort < rightPort;
+        });
+    };
+    sortSiblings(roots);
+    for (auto it = childrenByParent.begin(); it != childrenByParent.end(); ++it)
+        sortSiblings(it.value());
+
+    QList<int> ordered;
+    QSet<int> visited;
+    std::function<void(int)> appendSubtree = [&](int index) {
+        if (visited.contains(index)) return;
+        visited.insert(index);
+        ordered.append(index);
+        for (const auto child : childrenByParent.value(m_filtered.at(index).topologyId))
+            appendSubtree(child);
+    };
+    for (const auto root : roots) appendSubtree(root);
+    for (const auto index : visible) appendSubtree(index);
+
+    QList<Device> reordered;
+    reordered.reserve(ordered.size());
+    for (const auto index : ordered) reordered.append(m_filtered.at(index));
+    m_filtered = reordered;
+
+    idToIndex.clear();
+    for (int i = 0; i < m_filtered.size(); ++i)
+        idToIndex.insert(m_filtered.at(i).topologyId, i);
+
+    childrenByParent.clear();
+    roots.clear();
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        if (!device.presentationTreeParentId.isEmpty())
+            childrenByParent[device.presentationTreeParentId].append(i);
+        else
+            roots.append(i);
+    }
+    for (const auto index : roots) {
+        auto &device = m_filtered[index];
+        device.presentationTreeDepth = 0;
+    }
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        QSet<QString> seen;
+        QString parentId = device.presentationTreeParentId;
+        int depth = 0;
+        while (!parentId.isEmpty() && !seen.contains(parentId)) {
+            seen.insert(parentId);
+            const auto parentIndex = idToIndex.value(parentId, -1);
+            if (parentIndex < 0) break;
+            ++depth;
+            parentId = m_filtered.at(parentIndex).presentationTreeParentId;
+        }
+        device.presentationTreeDepth = depth;
+    }
+    for (auto it = childrenByParent.cbegin(); it != childrenByParent.cend(); ++it) {
+        const auto parentIndex = idToIndex.value(it.key(), -1);
+        if (parentIndex >= 0)
+            m_filtered[parentIndex].presentationTreeHasChildren = !it.value().isEmpty();
+        for (int i = 0; i < it.value().size(); ++i)
+            m_filtered[it.value().at(i)].presentationTreeIsLastChild = i == it.value().size() - 1;
+    }
+    for (int i = 0; i < roots.size(); ++i)
+        m_filtered[roots.at(i)].presentationTreeIsLastChild = i == roots.size() - 1;
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        QStringList ancestorIds;
+        QString currentId = device.presentationTreeParentId;
+        QSet<QString> seen;
+        while (!currentId.isEmpty() && !seen.contains(currentId)) {
+            seen.insert(currentId);
+            ancestorIds.prepend(currentId);
+            const auto parentIndex = idToIndex.value(currentId, -1);
+            if (parentIndex < 0) break;
+            currentId = m_filtered.at(parentIndex).presentationTreeParentId;
+        }
+        for (const auto &ancestorId : ancestorIds) {
+            const auto ancestorIndex = idToIndex.value(ancestorId, -1);
+            if (ancestorIndex >= 0)
+                device.presentationTreeAncestorLastFlags.append(m_filtered.at(ancestorIndex).presentationTreeIsLastChild);
+        }
+    }
 }
 
 void DeviceModel::resolvePhysicalProfiles()
@@ -897,6 +995,7 @@ void DeviceModel::resolvePhysicalInstances()
 
     for (int i = 0; i < m_filtered.size(); ++i) {
         auto &device = m_filtered[i];
+        device.physicalIntegratedMembers.clear();
         const int rootIndex = rootFor(i);
         const auto key = rootKeys.value(rootIndex);
         device.physicalInstanceKey = key;
@@ -911,6 +1010,31 @@ void DeviceModel::resolvePhysicalInstances()
         if (!device.physicalAliasIdentityAmbiguous && m_userAliases.contains(key)) {
             device.physicalName = m_userAliases.value(key);
             device.physicalIdentitySource = QStringLiteral("user");
+        }
+    }
+
+    QHash<QString, int> topologyIndexes;
+    for (int i = 0; i < m_filtered.size(); ++i)
+        topologyIndexes.insert(m_filtered.at(i).topologyId, i);
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &root = m_filtered[i];
+        if (root.physicalRelationshipType != QLatin1String("root")) continue;
+        for (const auto &memberId : root.physicalMemberIds) {
+            const auto memberIndex = topologyIndexes.value(memberId, -1);
+            if (memberIndex < 0 || memberIndex == i) continue;
+            const auto &member = m_filtered.at(memberIndex);
+            if (member.physicalRelationshipType != QLatin1String("integrated_function")) continue;
+            root.physicalIntegratedMembers.append(QVariantMap{
+                {QStringLiteral("topologyId"), member.topologyId},
+                {QStringLiteral("displayName"), member.displayName},
+                {QStringLiteral("displayVendor"), member.displayVendor},
+                {QStringLiteral("vendorId"), member.vendorId},
+                {QStringLiteral("productId"), member.productId},
+                {QStringLiteral("deviceClass"), member.deviceClass},
+                {QStringLiteral("primaryDriver"), member.primaryDriver},
+                {QStringLiteral("physicalRelationshipType"), member.physicalRelationshipType},
+                {QStringLiteral("topologyPort"), member.topologyPort}
+            });
         }
     }
 }
@@ -1020,12 +1144,19 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case TopologyHasChildrenRole: return device.topologyHasChildren;
     case TopologyIsLastChildRole: return device.topologyIsLastChild;
     case TopologyAncestorLastFlagsRole: return device.topologyAncestorLastFlags;
+    case PresentationTreeParentIdRole: return device.presentationTreeParentId;
+    case PresentationTreeDepthRole: return device.presentationTreeDepth;
+    case PresentationTreePortRole: return device.presentationTreePort;
+    case PresentationTreeHasChildrenRole: return device.presentationTreeHasChildren;
+    case PresentationTreeIsLastChildRole: return device.presentationTreeIsLastChild;
+    case PresentationTreeAncestorLastFlagsRole: return device.presentationTreeAncestorLastFlags;
     case PhysicalNameRole: return device.physicalName; case PhysicalVendorRole: return device.physicalVendor;
     case PhysicalIdentitySourceRole: return device.physicalIdentitySource;
     case PhysicalConfidenceRole: return device.physicalConfidence; case PhysicalProfileIdRole: return device.physicalProfileId;
     case PhysicalIsCompositeRole: return device.physicalIsComposite; case PhysicalTypeRole: return device.physicalType;
     case PhysicalGroupIdRole: return device.physicalGroupId; case PhysicalRootIdRole: return device.physicalRootId;
     case PhysicalMemberIdsRole: return device.physicalMemberIds;
+    case PhysicalIntegratedMembersRole: return device.physicalIntegratedMembers;
     case PhysicalRelationshipTypeRole: return device.physicalRelationshipType;
     case PhysicalInstanceKeyRole: return device.physicalInstanceKey;
     case PhysicalInstanceKeySourceRole: return device.physicalInstanceKeySource;
@@ -1072,11 +1203,16 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {TopologyResolvedRole,"topologyResolved"},{TopologyIssueRole,"topologyIssue"},
         {TopologyHasChildrenRole,"topologyHasChildren"},{TopologyIsLastChildRole,"topologyIsLastChild"},
         {TopologyAncestorLastFlagsRole,"topologyAncestorLastFlags"},
+        {PresentationTreeParentIdRole,"presentationTreeParentId"},{PresentationTreeDepthRole,"presentationTreeDepth"},
+        {PresentationTreePortRole,"presentationTreePort"},{PresentationTreeHasChildrenRole,"presentationTreeHasChildren"},
+        {PresentationTreeIsLastChildRole,"presentationTreeIsLastChild"},
+        {PresentationTreeAncestorLastFlagsRole,"presentationTreeAncestorLastFlags"},
         {PhysicalNameRole,"physicalName"},{PhysicalVendorRole,"physicalVendor"},
         {PhysicalIdentitySourceRole,"physicalIdentitySource"},{PhysicalConfidenceRole,"physicalConfidence"},
         {PhysicalProfileIdRole,"physicalProfileId"},{PhysicalIsCompositeRole,"physicalIsComposite"},
         {PhysicalTypeRole,"physicalType"},{PhysicalGroupIdRole,"physicalGroupId"},
         {PhysicalRootIdRole,"physicalRootId"},{PhysicalMemberIdsRole,"physicalMemberIds"},
+        {PhysicalIntegratedMembersRole,"physicalIntegratedMembers"},
         {PhysicalRelationshipTypeRole,"physicalRelationshipType"},
         {PhysicalInstanceKeyRole,"physicalInstanceKey"},{PhysicalInstanceKeySourceRole,"physicalInstanceKeySource"},
         {PhysicalAliasIdentityAmbiguousRole,"physicalAliasIdentityAmbiguous"}};

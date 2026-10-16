@@ -122,6 +122,12 @@ public:
         TopologyHasChildrenRole,
         TopologyIsLastChildRole,
         TopologyAncestorLastFlagsRole,
+        PresentationTreeParentIdRole,
+        PresentationTreeDepthRole,
+        PresentationTreePortRole,
+        PresentationTreeHasChildrenRole,
+        PresentationTreeIsLastChildRole,
+        PresentationTreeAncestorLastFlagsRole,
         PhysicalNameRole,
         PhysicalVendorRole,
         PhysicalIdentitySourceRole,
@@ -132,6 +138,7 @@ public:
         PhysicalGroupIdRole,
         PhysicalRootIdRole,
         PhysicalMemberIdsRole,
+        PhysicalIntegratedMembersRole,
         PhysicalRelationshipTypeRole,
         PhysicalInstanceKeyRole,
         PhysicalInstanceKeySourceRole,
@@ -196,9 +203,14 @@ private:
         int logicalRootBus = -1, logicalPortNumber = -1, topologyDepth = 0;
         QString topologyPort;
         bool topologyResolved = false, topologyHasChildren = false, topologyIsLastChild = false;
+        QString presentationTreeParentId, presentationTreePort;
+        QVariantList presentationTreeAncestorLastFlags;
+        int presentationTreeDepth = 0;
+        bool presentationTreeHasChildren = false, presentationTreeIsLastChild = false;
         QString physicalName, physicalVendor, physicalIdentitySource, physicalConfidence;
         QString physicalProfileId, physicalType, physicalGroupId, physicalRootId, physicalRelationshipType;
         QStringList physicalMemberIds;
+        QVariantList physicalIntegratedMembers;
         bool physicalIsComposite = false;
         QString physicalInstanceKey, physicalInstanceKeySource;
         bool physicalAliasIdentityAmbiguous = false;
@@ -214,6 +226,7 @@ private:
     void loadSnapshot(const QString &json);
     void rebuildFiltered();
     void resolveTopology();
+    void resolvePresentationTree();
     void resolvePhysicalProfiles();
     void resolvePhysicalInstances();
 
