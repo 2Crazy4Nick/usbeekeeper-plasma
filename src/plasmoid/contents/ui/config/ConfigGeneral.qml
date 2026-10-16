@@ -18,7 +18,7 @@ KCM.SimpleKCM {
             id: showTopologyTree
             text: i18n("Show as topology tree")
             enabled: showHubs.checked
-            Layout.leftMargin: Kirigami.Units.gridUnit
+            leftPadding: Kirigami.Units.gridUnit
         }
 
         CheckBox {
