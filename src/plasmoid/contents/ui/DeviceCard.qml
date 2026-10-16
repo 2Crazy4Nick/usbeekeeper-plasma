@@ -46,14 +46,14 @@ ColumnLayout {
                     spacing: 0
 
                     PlasmaComponents.Label {
-                        text: model.headline || ""
+                        text: model.displayName || model.headline || ""
                         font.bold: true
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
 
                     PlasmaComponents.Label {
-                        text: model.subtitle || ""
+                        text: model.isCompanionHubGroup ? (model.subtitle || "") : (model.displayVendor || model.subtitle || "")
                         opacity: 0.7
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
                         elide: Text.ElideRight

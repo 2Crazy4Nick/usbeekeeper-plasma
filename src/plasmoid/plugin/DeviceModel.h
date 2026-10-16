@@ -13,6 +13,7 @@ class DeviceModel : public QAbstractListModel {
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
     Q_PROPERTY(bool showHubs READ showHubs WRITE setShowHubs NOTIFY showHubsChanged)
     Q_PROPERTY(bool showEmptyPorts READ showEmptyPorts WRITE setShowEmptyPorts NOTIFY showEmptyPortsChanged)
+    Q_PROPERTY(bool showTopologyTree READ showTopologyTree WRITE setShowTopologyTree NOTIFY showTopologyTreeChanged)
 
 public:
     enum Roles {
@@ -58,6 +59,11 @@ public:
         VendorRole,
         ProductRole,
         SerialRole,
+        DisplayNameRole,
+        DisplayVendorRole,
+        IdentitySourceRole,
+        RawProductRole,
+        RawManufacturerRole,
         LinkSummaryRole,
         DataRateCapableRole,
         DataRateNegotiatedRole,
@@ -116,6 +122,8 @@ public:
     void setShowHubs(bool v);
     bool showEmptyPorts() const { return m_showEmptyPorts; }
     void setShowEmptyPorts(bool v);
+    bool showTopologyTree() const { return m_showTopologyTree; }
+    void setShowTopologyTree(bool v);
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void startMonitoring();
@@ -124,6 +132,7 @@ signals:
     void countChanged();
     void showHubsChanged();
     void showEmptyPortsChanged();
+    void showTopologyTreeChanged();
 
 private:
     struct Device {
@@ -131,7 +140,8 @@ private:
         QStringList bullets;
         int status = 0, speed = 0, maxPower = 0, portNumber = -1, cableMaxWatts = 0, maxSourcePower = 0;
         QString vendorId, productId, speedLabel, usbVersion, dataRole, powerRole;
-        QString deviceClass, deviceSubclass, primaryDriver, vendor, product, serial;
+        QString deviceClass, deviceSubclass, primaryDriver, vendor, manufacturer, product, serial;
+        QString displayName, displayVendor, identitySource;
         QString linkSummary, dataRateSummary, dataRateDetail, dataRateVerdict;
         int dataRateCapable = 0, dataRateNegotiated = 0;
         bool dataRateWarning = false;
@@ -165,6 +175,7 @@ private:
     QList<Device> m_filtered;
     bool m_showHubs = false;
     bool m_showEmptyPorts = false;
+    bool m_showTopologyTree = false;
 };
 
 } // namespace WhatCable

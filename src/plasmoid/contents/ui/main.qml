@@ -13,6 +13,7 @@ PlasmoidItem {
         id: deviceModel
         showHubs: Plasmoid.configuration.showHubs || false
         showEmptyPorts: Plasmoid.configuration.showEmptyPorts || false
+        showTopologyTree: Plasmoid.configuration.showTopologyTree || false
     }
 
     Component.onCompleted: {
