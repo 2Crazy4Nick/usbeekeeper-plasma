@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QHash>
 #include <QJsonArray>
 #include <QList>
 #include <QVariantList>
@@ -14,6 +15,7 @@ class DeviceModel : public QAbstractListModel {
     Q_PROPERTY(bool showHubs READ showHubs WRITE setShowHubs NOTIFY showHubsChanged)
     Q_PROPERTY(bool showEmptyPorts READ showEmptyPorts WRITE setShowEmptyPorts NOTIFY showEmptyPortsChanged)
     Q_PROPERTY(bool showTopologyTree READ showTopologyTree WRITE setShowTopologyTree NOTIFY showTopologyTreeChanged)
+    Q_PROPERTY(QString userAliasesJson READ userAliasesJson WRITE setUserAliasesJson NOTIFY userAliasesChanged)
 
 public:
     enum Roles {
@@ -131,6 +133,9 @@ public:
         PhysicalRootIdRole,
         PhysicalMemberIdsRole,
         PhysicalRelationshipTypeRole,
+        PhysicalInstanceKeyRole,
+        PhysicalInstanceKeySourceRole,
+        PhysicalAliasIdentityAmbiguousRole,
     };
     Q_ENUM(Roles)
 
@@ -146,6 +151,8 @@ public:
     void setShowEmptyPorts(bool v);
     bool showTopologyTree() const { return m_showTopologyTree; }
     void setShowTopologyTree(bool v);
+    QString userAliasesJson() const { return m_userAliasesJson; }
+    void setUserAliasesJson(const QString &value);
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void startMonitoring();
@@ -155,6 +162,7 @@ signals:
     void showHubsChanged();
     void showEmptyPortsChanged();
     void showTopologyTreeChanged();
+    void userAliasesChanged();
 
 private:
     struct Device {
@@ -192,6 +200,9 @@ private:
         QString physicalProfileId, physicalType, physicalGroupId, physicalRootId, physicalRelationshipType;
         QStringList physicalMemberIds;
         bool physicalIsComposite = false;
+        QString physicalInstanceKey, physicalInstanceKeySource;
+        bool physicalAliasIdentityAmbiguous = false;
+        QString profilePhysicalName, profilePhysicalVendor, profilePhysicalIdentitySource, profilePhysicalConfidence;
         bool transportUsb2 = false, transportUsb3 = false;
         QString cableSpeed, cableCurrent, cableType, cableVendor;
         bool isHub = false, isConnected = false, hasPowerDelivery = false;
@@ -204,6 +215,7 @@ private:
     void rebuildFiltered();
     void resolveTopology();
     void resolvePhysicalProfiles();
+    void resolvePhysicalInstances();
 
     UsbeehiveClient m_client;
     QList<Device> m_devices;
@@ -211,6 +223,8 @@ private:
     bool m_showHubs = false;
     bool m_showEmptyPorts = false;
     bool m_showTopologyTree = false;
+    QString m_userAliasesJson = QStringLiteral("{}");
+    QHash<QString, QString> m_userAliases;
 };
 
 } // namespace WhatCable

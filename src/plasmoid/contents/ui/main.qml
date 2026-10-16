@@ -14,6 +14,17 @@ PlasmoidItem {
         showHubs: Plasmoid.configuration.showHubs || false
         showEmptyPorts: Plasmoid.configuration.showEmptyPorts || false
         showTopologyTree: Plasmoid.configuration.showTopologyTree || false
+        userAliasesJson: Plasmoid.configuration.physicalAliases || "{}"
+    }
+
+    function updatePhysicalAlias(key, alias) {
+        var aliases = {}
+        try { aliases = JSON.parse(Plasmoid.configuration.physicalAliases || "{}") } catch (error) { aliases = {} }
+        if ((alias || "").trim().length > 0)
+            aliases[key] = alias.trim()
+        else
+            delete aliases[key]
+        Plasmoid.configuration.physicalAliases = JSON.stringify(aliases)
     }
 
     Component.onCompleted: {
@@ -89,6 +100,8 @@ PlasmoidItem {
                 delegate: DeviceCard {
                     width: deviceListView.width
                     topologyTreeActive: deviceModel.showHubs && deviceModel.showTopologyTree
+                    onPhysicalAliasSubmitted: root.updatePhysicalAlias(key, alias)
+                    onPhysicalAliasCleared: root.updatePhysicalAlias(key, "")
                 }
 
                 PlasmaComponents.Label {

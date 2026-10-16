@@ -455,6 +455,7 @@ void DeviceModel::rebuildFiltered()
             group.dataRateDetail.clear();
         }
         group.containerId = usb2.containerId;
+        if (group.serial.isEmpty()) group.serial = usb3.serial;
         group.logicalPath = usb2.logicalPath;
         group.logicalParentPath = usb2.logicalParentPath;
         group.logicalRootBus = usb2.logicalRootBus;
@@ -754,6 +755,7 @@ void DeviceModel::resolveTopology()
         }
     }
     resolvePhysicalProfiles();
+    resolvePhysicalInstances();
 }
 
 void DeviceModel::resolvePhysicalProfiles()
@@ -808,6 +810,10 @@ void DeviceModel::resolvePhysicalProfiles()
         device.physicalRootId = match.ambiguous ? QString() : match.physicalRootId;
         device.physicalMemberIds = match.ambiguous ? QStringList() : match.physicalMemberIds;
         device.physicalRelationshipType = match.ambiguous ? QString() : match.physicalRelationshipType;
+        device.profilePhysicalName = device.physicalName;
+        device.profilePhysicalVendor = device.physicalVendor;
+        device.profilePhysicalIdentitySource = device.physicalIdentitySource;
+        device.profilePhysicalConfidence = device.physicalConfidence;
     }
 
     for (const auto &match : matches) {
@@ -825,6 +831,86 @@ void DeviceModel::resolvePhysicalProfiles()
             member.physicalType = match.physicalType;
             member.physicalRelationshipType = match.physicalChildRelationshipType;
             member.physicalIsComposite = true;
+            member.profilePhysicalName = match.physicalName;
+            member.profilePhysicalVendor = match.physicalVendor;
+            member.profilePhysicalIdentitySource = match.physicalIdentitySource;
+            member.profilePhysicalConfidence = match.physicalConfidence;
+        }
+    }
+}
+
+void DeviceModel::resolvePhysicalInstances()
+{
+    auto useful = [](const QString &value) {
+        return !value.trimmed().isEmpty() && value.compare(QStringLiteral("unknown"), Qt::CaseInsensitive) != 0;
+    };
+    auto rootFor = [this](int index) {
+        const auto &device = m_filtered.at(index);
+        if (device.physicalRootId.isEmpty() || device.physicalRootId == device.topologyId)
+            return index;
+        for (int i = 0; i < m_filtered.size(); ++i)
+            if (m_filtered.at(i).topologyId == device.physicalRootId) return i;
+        return index;
+    };
+    auto rootKey = [&useful](const Device &root, QString *source) {
+        if (useful(root.serial)) {
+            if (source) *source = QStringLiteral("serial");
+            return QStringLiteral("serial:%1:%2:%3").arg(root.vendorId, root.productId, root.serial);
+        }
+        if (useful(root.containerId)) {
+            if (source) *source = QStringLiteral("container_id");
+            if (root.isCompanionHubGroup) {
+                return QStringLiteral("container:%1:%2:%3")
+                    .arg(root.containerId,
+                         root.usb2VendorId + root.usb2ProductId,
+                         root.usb3VendorId + root.usb3ProductId);
+            }
+            return QStringLiteral("container:%1").arg(root.containerId);
+        }
+        if (useful(root.physicalProfileId)) {
+            if (source) *source = QStringLiteral("hardware_signature");
+            return QStringLiteral("hardware:%1:%2:%3:%4:%5")
+                .arg(root.physicalProfileId, root.vendorId, root.productId,
+                     root.usb2VendorId + root.usb2ProductId,
+                     root.usb3VendorId + root.usb3ProductId);
+        }
+        if (source) *source = QStringLiteral("topology_fallback");
+        return QStringLiteral("topology:%1").arg(root.topologyId);
+    };
+
+    QHash<QString, QString> keySources;
+    QHash<QString, QStringList> keyRoots;
+    QHash<int, QString> rootKeys;
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        if (!m_filtered.at(i).physicalRootId.isEmpty() && m_filtered.at(i).physicalRootId != m_filtered.at(i).topologyId)
+            continue;
+        QString source;
+        const auto key = rootKey(m_filtered.at(i), &source);
+        rootKeys.insert(i, key);
+        keySources.insert(key, source);
+        keyRoots[key].append(m_filtered.at(i).topologyId);
+    }
+
+    QHash<QString, bool> ambiguousKeys;
+    for (auto it = keyRoots.cbegin(); it != keyRoots.cend(); ++it)
+        ambiguousKeys.insert(it.key(), it.value().size() > 1);
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        const int rootIndex = rootFor(i);
+        const auto key = rootKeys.value(rootIndex);
+        device.physicalInstanceKey = key;
+        device.physicalInstanceKeySource = keySources.value(key);
+        device.physicalAliasIdentityAmbiguous = ambiguousKeys.value(key, false);
+        device.physicalName = device.profilePhysicalName;
+        device.physicalVendor = device.profilePhysicalVendor;
+        device.physicalIdentitySource = device.profilePhysicalIdentitySource.isEmpty()
+            ? QStringLiteral("none") : device.profilePhysicalIdentitySource;
+        device.physicalConfidence = device.profilePhysicalConfidence.isEmpty()
+            ? QStringLiteral("none") : device.profilePhysicalConfidence;
+        if (!device.physicalAliasIdentityAmbiguous && m_userAliases.contains(key)) {
+            device.physicalName = m_userAliases.value(key);
+            device.physicalIdentitySource = QStringLiteral("user");
         }
     }
 }
@@ -921,6 +1007,9 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case PhysicalGroupIdRole: return device.physicalGroupId; case PhysicalRootIdRole: return device.physicalRootId;
     case PhysicalMemberIdsRole: return device.physicalMemberIds;
     case PhysicalRelationshipTypeRole: return device.physicalRelationshipType;
+    case PhysicalInstanceKeyRole: return device.physicalInstanceKey;
+    case PhysicalInstanceKeySourceRole: return device.physicalInstanceKeySource;
+    case PhysicalAliasIdentityAmbiguousRole: return device.physicalAliasIdentityAmbiguous;
     }
     return {};
 }
@@ -968,7 +1057,9 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {PhysicalProfileIdRole,"physicalProfileId"},{PhysicalIsCompositeRole,"physicalIsComposite"},
         {PhysicalTypeRole,"physicalType"},{PhysicalGroupIdRole,"physicalGroupId"},
         {PhysicalRootIdRole,"physicalRootId"},{PhysicalMemberIdsRole,"physicalMemberIds"},
-        {PhysicalRelationshipTypeRole,"physicalRelationshipType"}};
+        {PhysicalRelationshipTypeRole,"physicalRelationshipType"},
+        {PhysicalInstanceKeyRole,"physicalInstanceKey"},{PhysicalInstanceKeySourceRole,"physicalInstanceKeySource"},
+        {PhysicalAliasIdentityAmbiguousRole,"physicalAliasIdentityAmbiguous"}};
 }
 
 } // namespace WhatCable

@@ -10,6 +10,11 @@ ColumnLayout {
     property bool expanded: false
     property bool topologyTreeActive: false
     property real treeIndentStep: Kirigami.Units.gridUnit * 1.25
+    property bool editingPhysicalAlias: false
+    property string physicalAliasDraft: model.physicalName || ""
+
+    signal physicalAliasSubmitted(string key, string alias)
+    signal physicalAliasCleared(string key)
 
     Item {
         id: cardRow
@@ -224,6 +229,76 @@ ColumnLayout {
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
+                    }
+                }
+            }
+
+            // Optional user-defined physical identity. This is separate from
+            // the logical USB display identity and is intentionally compact.
+            ColumnLayout {
+                Layout.fillWidth: true
+                visible: card.expanded && (model.physicalInstanceKey || "").length > 0
+                         && !(model.physicalAliasIdentityAmbiguous || false)
+                spacing: 2
+
+                PlasmaComponents.Label {
+                    text: "Physical device name: " + (model.physicalName || "")
+                    visible: (model.physicalName || "").length > 0
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Label {
+                    text: "This name may be tied to the current USB port."
+                    visible: (model.physicalInstanceKeySource || "") === "topology_fallback"
+                    opacity: 0.7
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: card.editingPhysicalAlias
+
+                    PlasmaComponents.TextField {
+                        text: card.physicalAliasDraft
+                        placeholderText: "Friendly physical-device name"
+                        Layout.fillWidth: true
+                        onTextChanged: card.physicalAliasDraft = text
+                    }
+
+                    PlasmaComponents.Button {
+                        text: "Save"
+                        onClicked: {
+                            card.physicalAliasSubmitted(model.physicalInstanceKey, card.physicalAliasDraft)
+                            card.editingPhysicalAlias = false
+                        }
+                    }
+
+                    PlasmaComponents.Button {
+                        text: "Cancel"
+                        onClicked: card.editingPhysicalAlias = false
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: !card.editingPhysicalAlias
+
+                    PlasmaComponents.Button {
+                        text: (model.physicalName || "").length > 0
+                            ? "Rename physical device…" : "Name physical device…"
+                        onClicked: {
+                            card.physicalAliasDraft = model.physicalName || ""
+                            card.editingPhysicalAlias = true
+                        }
+                    }
+
+                    PlasmaComponents.Button {
+                        text: "Clear"
+                        visible: (model.physicalName || "").length > 0
+                        onClicked: card.physicalAliasCleared(model.physicalInstanceKey)
                     }
                 }
             }
