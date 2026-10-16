@@ -938,7 +938,27 @@ void DeviceModel::setShowTopologyTree(bool value)
 {
     if (m_showTopologyTree == value) return;
     m_showTopologyTree = value;
+    rebuildFiltered();
     emit showTopologyTreeChanged();
+}
+
+void DeviceModel::setUserAliasesJson(const QString &value)
+{
+    if (m_userAliasesJson == value) return;
+    m_userAliasesJson = value;
+    m_userAliases.clear();
+    const auto document = QJsonDocument::fromJson(value.toUtf8());
+    if (document.isObject()) {
+        const auto aliases = document.object();
+        for (auto it = aliases.begin(); it != aliases.end(); ++it) {
+            if (it.value().isString() && !it.value().toString().trimmed().isEmpty())
+                m_userAliases.insert(it.key(), it.value().toString().trimmed());
+        }
+    }
+    resolvePhysicalInstances();
+    if (!m_filtered.isEmpty())
+        emit dataChanged(index(0, 0), index(m_filtered.size() - 1, 0));
+    emit userAliasesChanged();
 }
 
 int DeviceModel::rowCount(const QModelIndex &parent) const { return parent.isValid() ? 0 : m_filtered.size(); }
