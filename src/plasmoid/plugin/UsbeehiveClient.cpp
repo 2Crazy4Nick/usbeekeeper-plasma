@@ -59,8 +59,9 @@ void UsbeehiveClient::refresh()
 void UsbeehiveClient::handleSnapshot(QDBusPendingCallWatcher *watcher)
 {
     QDBusPendingReply<QString> reply = *watcher;
-    if (!reply.isError())
+    if (!reply.isError()) {
         emit snapshotReady(reply.value());
+    }
     watcher->deleteLater();
 }
 

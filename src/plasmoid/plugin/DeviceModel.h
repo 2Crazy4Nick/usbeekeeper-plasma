@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QJsonArray>
 #include <QList>
+#include <QVariantList>
 #include "UsbeehiveClient.h"
 
 namespace WhatCable {
@@ -50,6 +51,58 @@ public:
         ChargingSummaryRole,
         ChargingDetailRole,
         ChargingIsWarningRole,
+        // usbeehive details
+        DeviceClassRole,
+        DeviceSubclassRole,
+        PrimaryDriverRole,
+        VendorRole,
+        ProductRole,
+        SerialRole,
+        LinkSummaryRole,
+        DataRateCapableRole,
+        DataRateNegotiatedRole,
+        DataRateSummaryRole,
+        DataRateDetailRole,
+        DataRateVerdictRole,
+        DataRateWarningRole,
+        DetailsRole,
+        UsbCapableSpeedRole,
+        UsbCapableGenRole,
+        UsbLinkVerdictRole,
+        PortIdRole,
+        PortPeerIdRole,
+        PortPeerStateRole,
+        PortConnectTypeRole,
+        HubPortsTotalRole,
+        HubPortsUsedRole,
+        HubPowerCommittedRole,
+        PowerSourceRole,
+        ProductDbRole,
+        KernelQuirksRole,
+        UsbAltmodeSvidsRole,
+        UsbAltmodeStateRole,
+        HasAltmodeRole,
+        AltmodeNameRole,
+        AltmodeSummaryRole,
+        IsCompanionHubGroupRole,
+        Usb2ProductRole,
+        Usb2VendorIdRole,
+        Usb2ProductIdRole,
+        Usb2SpeedRole,
+        Usb2SpeedLabelRole,
+        Usb2PortIdRole,
+        Usb2PortsTotalRole,
+        Usb2PortsUsedRole,
+        Usb3ProductRole,
+        Usb3VendorIdRole,
+        Usb3ProductIdRole,
+        Usb3SpeedRole,
+        Usb3SpeedLabelRole,
+        Usb3PortIdRole,
+        Usb3PortsTotalRole,
+        Usb3PortsUsedRole,
+        ReportedDownstreamPortsRole,
+        ContainerIdRole,
     };
     Q_ENUM(Roles)
 
@@ -78,6 +131,25 @@ private:
         QStringList bullets;
         int status = 0, speed = 0, maxPower = 0, portNumber = -1, cableMaxWatts = 0, maxSourcePower = 0;
         QString vendorId, productId, speedLabel, usbVersion, dataRole, powerRole;
+        QString deviceClass, deviceSubclass, primaryDriver, vendor, product, serial;
+        QString linkSummary, dataRateSummary, dataRateDetail, dataRateVerdict;
+        int dataRateCapable = 0, dataRateNegotiated = 0;
+        bool dataRateWarning = false;
+        QVariantList details;
+        QString usbCapableSpeed, usbCapableGen, usbLinkVerdict;
+        QString portId, portPeerId, portPeerState, portConnectType;
+        QString hubPortsTotal, hubPortsUsed, hubPowerCommitted;
+        QString powerSource, productDb, kernelQuirks, usbAltmodeSvids, usbAltmodeState;
+        bool hasAltmode = false;
+        QString altmodeName, altmodeSummary;
+        bool isCompanionHubGroup = false;
+        QString usb2Product, usb2VendorId, usb2ProductId, usb2SpeedLabel, usb2PortId;
+        int usb2Speed = 0, usb2PortsTotal = 0, usb2PortsUsed = 0;
+        QString usb3Product, usb3VendorId, usb3ProductId, usb3SpeedLabel, usb3PortId;
+        int usb3Speed = 0, usb3PortsTotal = 0, usb3PortsUsed = 0;
+        int reportedDownstreamPorts = 0;
+        QString containerId;
+        bool transportUsb2 = false, transportUsb3 = false;
         QString cableSpeed, cableCurrent, cableType, cableVendor;
         bool isHub = false, isConnected = false, hasPowerDelivery = false;
         QJsonArray sourcePdos;

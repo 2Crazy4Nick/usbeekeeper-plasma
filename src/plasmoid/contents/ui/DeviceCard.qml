@@ -60,6 +60,16 @@ ColumnLayout {
                         Layout.fillWidth: true
                         visible: text.length > 0
                     }
+
+                    PlasmaComponents.Label {
+                        text: model.linkSummary || ""
+                        color: (model.dataRateWarning || false) ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+                        opacity: (model.dataRateWarning || false) ? 1.0 : 0.7
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        visible: text.length > 0
+                    }
                 }
 
                 // Expand/collapse button
@@ -68,6 +78,33 @@ ColumnLayout {
                     onClicked: card.expanded = !card.expanded
                     implicitWidth: Kirigami.Units.iconSizes.small * 2
                     implicitHeight: Kirigami.Units.iconSizes.small * 2
+                }
+            }
+
+            // Link diagnostics (shown when expanded)
+            ColumnLayout {
+                Layout.fillWidth: true
+                visible: card.expanded && (!(model.hasAltmode || false) || (model.dataRateWarning || false))
+                         && ((model.dataRateSummary || "").length > 0
+                                           || (model.dataRateDetail || "").length > 0)
+                spacing: 0
+
+                PlasmaComponents.Label {
+                    text: model.dataRateSummary || ""
+                    color: (model.dataRateWarning || false) ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+                    font.bold: true
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Label {
+                    text: model.dataRateDetail || ""
+                    opacity: 0.7
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    visible: text.length > 0
                 }
             }
 
@@ -112,27 +149,28 @@ ColumnLayout {
                 }
             }
 
-            // Bullet details (shown when expanded)
+            // Curated usbeehive details (shown when expanded)
             ColumnLayout {
                 Layout.fillWidth: true
                 visible: card.expanded
                 spacing: 2
 
                 Repeater {
-                    model: card.parent ? bullets : []
+                    model: model.details || []
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Kirigami.Units.smallSpacing
 
                         PlasmaComponents.Label {
-                            text: "•"
+                            text: modelData.label + ":"
                             opacity: 0.5
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            Layout.preferredWidth: Kirigami.Units.gridUnit * 7
                         }
 
                         PlasmaComponents.Label {
-                            text: modelData
+                            text: modelData.value
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true

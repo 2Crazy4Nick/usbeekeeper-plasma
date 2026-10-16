@@ -29,6 +29,14 @@ add_custom_command(TARGET whatcable-plasmoid-plugin POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/DeviceCard.qml"
         "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/PowerSourceList.qml"
         "${PKG_DIR}/contents/ui/"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${PKG_DIR}/contents/config" "${PKG_DIR}/contents/ui/config"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_CURRENT_SOURCE_DIR}/contents/config/config.qml"
+        "${CMAKE_CURRENT_SOURCE_DIR}/contents/config/main.xml"
+        "${PKG_DIR}/contents/config/"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/config/ConfigGeneral.qml"
+        "${PKG_DIR}/contents/ui/config/"
     # Also stage the QML plugin for local development
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/qml/org/kde/whatcable"
     COMMAND ${CMAKE_COMMAND} -E copy
