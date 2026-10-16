@@ -88,6 +88,7 @@ PlasmoidItem {
 
                 delegate: DeviceCard {
                     width: deviceListView.width
+                    topologyTreeActive: deviceModel.showHubs && deviceModel.showTopologyTree
                 }
 
                 PlasmaComponents.Label {

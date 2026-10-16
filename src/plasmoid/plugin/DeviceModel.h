@@ -117,6 +117,9 @@ public:
         TopologyAliasesRole,
         TopologyResolvedRole,
         TopologyIssueRole,
+        TopologyHasChildrenRole,
+        TopologyIsLastChildRole,
+        TopologyAncestorLastFlagsRole,
     };
     Q_ENUM(Roles)
 
@@ -170,9 +173,10 @@ private:
         QString logicalPath, logicalParentPath, topologyId, topologyParentId, topologyPath;
         QString topologyIssue;
         QStringList logicalPaths, logicalParentPaths, logicalPortNumbers, topologyAliases;
+        QVariantList topologyAncestorLastFlags;
         int logicalRootBus = -1, logicalPortNumber = -1, topologyDepth = 0;
         QString topologyPort;
-        bool topologyResolved = false;
+        bool topologyResolved = false, topologyHasChildren = false, topologyIsLastChild = false;
         bool transportUsb2 = false, transportUsb3 = false;
         QString cableSpeed, cableCurrent, cableType, cableVendor;
         bool isHub = false, isConnected = false, hasPowerDelivery = false;

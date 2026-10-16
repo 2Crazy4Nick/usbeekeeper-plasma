@@ -1,5 +1,7 @@
 #include "DeviceModel.h"
 
+#include <algorithm>
+#include <functional>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QHash>
@@ -657,6 +659,99 @@ void DeviceModel::resolveTopology()
         }
         if (device.topologyResolved) device.topologyDepth = depth;
     }
+
+    if (m_showHubs && m_showTopologyTree) {
+        QHash<QString, QList<int>> childrenByParent;
+        QList<int> roots;
+        for (int i = 0; i < m_filtered.size(); ++i) {
+            const auto &device = m_filtered.at(i);
+            const auto parentOwners = idOwners.value(device.topologyParentId);
+            if (device.topologyResolved && !device.topologyParentId.isEmpty()
+                && parentOwners.size() == 1 && m_filtered.at(parentOwners.first()).topologyResolved)
+                childrenByParent[device.topologyParentId].append(i);
+            else
+                roots.append(i);
+        }
+
+        auto sortSiblings = [this](QList<int> &siblings) {
+            std::stable_sort(siblings.begin(), siblings.end(), [this](int left, int right) {
+                bool leftOk = false;
+                bool rightOk = false;
+                const int leftPort = m_filtered.at(left).topologyPort.toInt(&leftOk);
+                const int rightPort = m_filtered.at(right).topologyPort.toInt(&rightOk);
+                return leftOk && rightOk && leftPort != rightPort && leftPort < rightPort;
+            });
+        };
+        sortSiblings(roots);
+        for (auto it = childrenByParent.begin(); it != childrenByParent.end(); ++it)
+            sortSiblings(it.value());
+
+        QList<int> ordered;
+        QSet<int> visited;
+        std::function<void(int)> appendSubtree = [&](int index) {
+            if (visited.contains(index)) return;
+            visited.insert(index);
+            ordered.append(index);
+            const auto children = childrenByParent.value(m_filtered.at(index).topologyId);
+            for (const auto child : children) appendSubtree(child);
+        };
+        for (const auto root : roots) appendSubtree(root);
+        for (int i = 0; i < m_filtered.size(); ++i) appendSubtree(i);
+
+        QList<Device> reordered;
+        reordered.reserve(m_filtered.size());
+        for (const auto index : ordered) reordered.append(m_filtered.at(index));
+        m_filtered = reordered;
+    }
+
+    QHash<QString, QList<int>> childrenByParent;
+    QHash<QString, int> idToIndex;
+    QList<int> roots;
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        device.topologyHasChildren = false;
+        device.topologyIsLastChild = false;
+        device.topologyAncestorLastFlags.clear();
+        idToIndex.insert(device.topologyId, i);
+    }
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        const auto &device = m_filtered.at(i);
+        const auto parentIndex = idToIndex.value(device.topologyParentId, -1);
+        if (device.topologyResolved && !device.topologyParentId.isEmpty()
+            && parentIndex >= 0)
+            childrenByParent[device.topologyParentId].append(i);
+        else
+            roots.append(i);
+    }
+    for (auto it = childrenByParent.cbegin(); it != childrenByParent.cend(); ++it) {
+        const auto children = it.value();
+        if (idToIndex.contains(it.key()))
+            m_filtered[idToIndex.value(it.key())].topologyHasChildren = !children.isEmpty();
+        for (int i = 0; i < children.size(); ++i)
+            m_filtered[children.at(i)].topologyIsLastChild = i == children.size() - 1;
+    }
+    for (int i = 0; i < roots.size(); ++i)
+        m_filtered[roots.at(i)].topologyIsLastChild = i == roots.size() - 1;
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        if (!device.topologyResolved || device.topologyParentId.isEmpty()) continue;
+        QStringList ancestorIds;
+        QString currentId = device.topologyParentId;
+        QSet<QString> seen;
+        while (!currentId.isEmpty() && !seen.contains(currentId)) {
+            seen.insert(currentId);
+            ancestorIds.prepend(currentId);
+            const auto parentIndex = idToIndex.value(currentId, -1);
+            if (parentIndex < 0) break;
+            currentId = m_filtered.at(parentIndex).topologyParentId;
+        }
+        for (const auto &ancestorId : ancestorIds) {
+            const auto ancestorIndex = idToIndex.value(ancestorId, -1);
+            if (ancestorIndex >= 0)
+                device.topologyAncestorLastFlags.append(m_filtered.at(ancestorIndex).topologyIsLastChild);
+        }
+    }
 }
 
 void DeviceModel::refresh() { m_client.refresh(); }
@@ -741,6 +836,9 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case TopologyDepthRole: return device.topologyDepth; case TopologyPortRole: return device.topologyPort;
     case TopologyPathRole: return device.topologyPath; case TopologyAliasesRole: return device.topologyAliases;
     case TopologyResolvedRole: return device.topologyResolved; case TopologyIssueRole: return device.topologyIssue;
+    case TopologyHasChildrenRole: return device.topologyHasChildren;
+    case TopologyIsLastChildRole: return device.topologyIsLastChild;
+    case TopologyAncestorLastFlagsRole: return device.topologyAncestorLastFlags;
     }
     return {};
 }
@@ -780,7 +878,9 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {ReportedDownstreamPortsRole,"reportedDownstreamPorts"},{ContainerIdRole,"containerId"},
         {TopologyIdRole,"topologyId"},{TopologyParentIdRole,"topologyParentId"},{TopologyDepthRole,"topologyDepth"},
         {TopologyPortRole,"topologyPort"},{TopologyPathRole,"topologyPath"},{TopologyAliasesRole,"topologyAliases"},
-        {TopologyResolvedRole,"topologyResolved"},{TopologyIssueRole,"topologyIssue"}};
+        {TopologyResolvedRole,"topologyResolved"},{TopologyIssueRole,"topologyIssue"},
+        {TopologyHasChildrenRole,"topologyHasChildren"},{TopologyIsLastChildRole,"topologyIsLastChild"},
+        {TopologyAncestorLastFlagsRole,"topologyAncestorLastFlags"}};
 }
 
 } // namespace WhatCable

@@ -8,27 +8,76 @@ ColumnLayout {
     spacing: Kirigami.Units.smallSpacing
 
     property bool expanded: false
+    property bool topologyTreeActive: false
+    property real treeIndentStep: Kirigami.Units.gridUnit * 1.25
 
-    Rectangle {
+    Item {
+        id: cardRow
         Layout.fillWidth: true
-        Layout.margins: Kirigami.Units.smallSpacing
-        radius: Kirigami.Units.cornerRadius
-        color: {
-            if (model.category === "typec")
-                return Qt.rgba(Kirigami.Theme.highlightColor.r,
-                              Kirigami.Theme.highlightColor.g,
-                              Kirigami.Theme.highlightColor.b, 0.08)
-            return Qt.rgba(Kirigami.Theme.textColor.r,
-                          Kirigami.Theme.textColor.g,
-                          Kirigami.Theme.textColor.b, 0.04)
-        }
-        implicitHeight: cardContent.implicitHeight + Kirigami.Units.smallSpacing * 2
+        implicitHeight: cardRectangle.implicitHeight
 
-        ColumnLayout {
-            id: cardContent
+        RowLayout {
             anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
-            spacing: Kirigami.Units.smallSpacing
+            spacing: 0
+
+            Item {
+                id: topologyGuides
+                Layout.fillHeight: true
+                Layout.preferredWidth: card.topologyTreeActive
+                    ? (model.topologyDepth || 0) * card.treeIndentStep : 0
+                property var ancestorLastFlags: model.topologyAncestorLastFlags || []
+                property int depth: model.topologyDepth || 0
+
+                Repeater {
+                    model: card.topologyTreeActive ? topologyGuides.depth : 0
+
+                    delegate: Item {
+                        width: card.treeIndentStep
+                        height: topologyGuides.height
+
+                        Rectangle {
+                            width: 1
+                            height: (topologyGuides.ancestorLastFlags[index] || false)
+                                ? parent.height / 2 : parent.height
+                            x: (parent.width - width) / 2
+                            color: Kirigami.Theme.textColor
+                            opacity: 0.22
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: card.topologyTreeActive && topologyGuides.depth > 0
+                    width: card.treeIndentStep
+                    height: 1
+                    x: (topologyGuides.depth - 1) * card.treeIndentStep + card.treeIndentStep / 2
+                    y: topologyGuides.height / 2
+                    color: Kirigami.Theme.textColor
+                    opacity: 0.22
+                }
+            }
+
+            Rectangle {
+                id: cardRectangle
+                Layout.fillWidth: true
+                Layout.margins: Kirigami.Units.smallSpacing
+                radius: Kirigami.Units.cornerRadius
+                color: {
+                    if (model.category === "typec")
+                        return Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                      Kirigami.Theme.highlightColor.g,
+                                      Kirigami.Theme.highlightColor.b, 0.08)
+                    return Qt.rgba(Kirigami.Theme.textColor.r,
+                                  Kirigami.Theme.textColor.g,
+                                  Kirigami.Theme.textColor.b, 0.04)
+                }
+                implicitHeight: cardContent.implicitHeight + Kirigami.Units.smallSpacing * 2
+
+                ColumnLayout {
+                    id: cardContent
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.smallSpacing
+                    spacing: Kirigami.Units.smallSpacing
 
             // Header row
             RowLayout {
@@ -184,6 +233,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 visible: card.expanded && (model.hasPowerDelivery || false)
                 pdos: model.sourcePdos || []
+            }
+                }
             }
         }
     }
