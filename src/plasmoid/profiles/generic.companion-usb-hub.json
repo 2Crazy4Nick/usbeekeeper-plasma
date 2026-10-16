@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "generic.companion-usb-hub",
+  "description": "A companion USB2/USB3 hub with a stable BOS container identity.",
+  "physicalType": "hub",
+  "root": {
+    "requireCompanionGroup": true,
+    "requireContainerId": true
+  },
+  "members": []
+}

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "generic.via2817-integrated-lan-cardreader",
+  "description": "VIA 2817/0817 companion hub with integrated LAN and card-reader functions.",
+  "physicalType": "hub_composite",
+  "physicalIdentitySource": "profile",
+  "physicalConfidence": "exact",
+  "root": {
+    "requireCompanionGroup": true,
+    "requireContainerId": true,
+    "exactCompanionFunctions": true,
+    "companionFunctions": [
+      { "vid": "2109", "pid": "2817" },
+      { "vid": "2109", "pid": "0817" }
+    ]
+  },
+  "members": [
+    {
+      "match": {
+        "vid": "0bda",
+        "pid": "8153",
+        "logicalPort": "2"
+      },
+      "relationship": "integrated_function",
+      "required": true
+    },
+    {
+      "match": {
+        "vid": "058f",
+        "pid": "8468",
+        "logicalPort": "3"
+      },
+      "relationship": "integrated_function",
+      "required": true
+    }
+  ]
+}

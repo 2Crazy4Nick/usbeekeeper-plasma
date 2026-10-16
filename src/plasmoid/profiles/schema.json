@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WhatCable physical USB profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "root", "members"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "description": { "type": "string" },
+    "physicalType": { "type": "string" },
+    "physicalName": { "type": "string" },
+    "physicalVendor": { "type": "string" },
+    "physicalIdentitySource": { "type": "string", "enum": ["none", "profile", "user", "deterministic"] },
+    "physicalConfidence": { "type": "string", "enum": ["none", "possible", "probable", "exact"] },
+    "relationshipSource": { "type": "string", "enum": ["none", "hardware", "profile", "user"] },
+    "root": { "$ref": "#/$defs/root" },
+    "members": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/member" }
+    }
+  },
+  "$defs": {
+    "vidPid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vid", "pid"],
+      "properties": {
+        "vid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+        "pid": { "type": "string", "pattern": "^[0-9a-f]{4}$" }
+      }
+    },
+    "root": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requireCompanionGroup": { "type": "boolean" },
+        "requireContainerId": { "type": "boolean" },
+        "exactCompanionFunctions": { "type": "boolean" },
+        "companionFunctions": { "type": "array", "items": { "$ref": "#/$defs/vidPid" } },
+        "parentFunctions": { "type": "array", "items": { "$ref": "#/$defs/vidPid" } },
+        "manufacturer": { "type": "string" },
+        "productDb": { "type": "string" },
+        "interfaceClass": { "type": "string" }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match", "relationship", "required"],
+      "properties": {
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vid", "pid"],
+          "properties": {
+            "vid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+            "pid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
+            "logicalPort": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "interfaceClass": { "type": "string" }
+          }
+        },
+        "relationship": { "const": "integrated_function" },
+        "required": { "const": true }
+      }
+    }
+  }
+}

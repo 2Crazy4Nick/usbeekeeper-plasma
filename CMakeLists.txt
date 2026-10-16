@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(whatcable-linux VERSION 0.1.0 LANGUAGES CXX)
 
+include(CTest)
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME validate_physical_profiles
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/validate_profiles.py)
+    add_test(NAME physical_profile_validator_tests
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s ${CMAKE_SOURCE_DIR}/tests -p test_*.py)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)

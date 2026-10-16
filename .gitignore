@@ -14,3 +14,7 @@ compile_commands.json
 .idea/
 .vscode/
 *.user
+
+# Python bytecode
+__pycache__/
+*.py[cod]

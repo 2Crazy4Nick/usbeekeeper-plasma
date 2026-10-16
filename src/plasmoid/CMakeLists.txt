@@ -5,6 +5,15 @@ add_library(whatcable-plasmoid-plugin SHARED
     plugin/UsbeehiveClient.cpp
 )
 
+# Profile JSON files are discovered automatically.  Adding a new profile file
+# triggers reconfiguration and does not require a CMake file-list edit.
+file(GLOB PROFILE_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/profiles/*.json")
+qt_add_resources(whatcable-plasmoid-plugin physical_profiles
+    PREFIX "/org/kde/whatcable/profiles"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/profiles"
+    FILES ${PROFILE_FILES})
+
 target_link_libraries(whatcable-plasmoid-plugin PRIVATE
     Qt6::Core
     Qt6::DBus
@@ -61,3 +70,17 @@ add_custom_target(whatcable-plasmoid-package ALL
         "${CMAKE_BINARY_DIR}/qml/org/kde/whatcable/"
     COMMENT "Assembling plasmoid package and QML plugin"
 )
+
+if(BUILD_TESTING)
+    add_executable(physical_profile_match_tests
+        "${CMAKE_SOURCE_DIR}/tests/physical_profile_match_test.cpp"
+        plugin/PhysicalDeviceProfile.cpp)
+    qt_add_resources(physical_profile_match_tests physical_profiles_test
+        PREFIX "/org/kde/whatcable/profiles"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/profiles"
+        FILES ${PROFILE_FILES})
+    target_include_directories(physical_profile_match_tests PRIVATE plugin)
+    target_link_libraries(physical_profile_match_tests PRIVATE
+        whatcable-plasmoid-plugin Qt6::Core)
+    add_test(NAME physical_profile_match_tests COMMAND physical_profile_match_tests)
+endif()

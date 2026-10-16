@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "generic.vl813-integrated-audio",
+  "description": "VIA VL813 companion hub with its known integrated C-Media audio function.",
+  "physicalType": "hub_audio",
+  "physicalIdentitySource": "profile",
+  "physicalConfidence": "exact",
+  "root": {
+    "requireCompanionGroup": true,
+    "requireContainerId": true,
+    "exactCompanionFunctions": true,
+    "companionFunctions": [
+      { "vid": "2109", "pid": "2813" },
+      { "vid": "2109", "pid": "0813" }
+    ]
+  },
+  "members": [
+    {
+      "match": {
+        "vid": "0d8c",
+        "pid": "0014",
+        "logicalPort": "4"
+      },
+      "relationship": "integrated_function",
+      "required": true
+    }
+  ]
+}
