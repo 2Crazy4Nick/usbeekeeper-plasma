@@ -46,6 +46,8 @@ ColumnLayout {
                 PlasmaComponents.Label {
                     text: modelData.voltage + " @ " + modelData.current
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.WrapAnywhere
+                    Layout.minimumWidth: 0
                     Layout.fillWidth: true
                 }
 
@@ -54,12 +56,16 @@ ColumnLayout {
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                     font.bold: modelData.active
                     opacity: modelData.active ? 1.0 : 0.7
+                    wrapMode: Text.WrapAnywhere
+                    Layout.minimumWidth: 0
                 }
 
                 PlasmaComponents.Label {
                     text: modelData.type
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                     opacity: 0.5
+                    wrapMode: Text.WrapAnywhere
+                    Layout.minimumWidth: 0
                 }
             }
         }

@@ -100,20 +100,30 @@ ColumnLayout {
 
                 ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     spacing: 0
 
                     PlasmaComponents.Label {
+                        id: titleLabel
                         text: (card.topologyTreeActive
                                && model.physicalRelationshipType === "root"
                                && (model.physicalName || "").length > 0)
                             ? model.physicalName
                             : (model.displayName || model.headline || "")
                         font.bold: true
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
                         elide: Text.ElideRight
                         Layout.fillWidth: true
+
+                        PlasmaComponents.ToolTip {
+                            text: titleLabel.text
+                            visible: titleLabel.truncated
+                        }
                     }
 
                     PlasmaComponents.Label {
+                        id: subtitleLabel
                         text: {
                             if (card.topologyTreeActive && model.physicalRelationshipType === "root"
                                     && (model.physicalName || "").length > 0) {
@@ -132,9 +142,16 @@ ColumnLayout {
                         }
                         opacity: 0.7
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                         visible: text.length > 0
+
+                        PlasmaComponents.ToolTip {
+                            text: subtitleLabel.text
+                            visible: subtitleLabel.truncated
+                        }
                     }
 
                     PlasmaComponents.Label {
@@ -142,7 +159,7 @@ ColumnLayout {
                         color: (model.dataRateWarning || false) ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
                         opacity: (model.dataRateWarning || false) ? 1.0 : 0.7
                         font.pointSize: Kirigami.Theme.smallFont.pointSize
-                        elide: Text.ElideRight
+                        wrapMode: Text.Wrap
                         Layout.fillWidth: true
                         visible: text.length > 0
                     }
@@ -213,12 +230,16 @@ ColumnLayout {
                             text: model.chargingSummary || ""
                             font.bold: true
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
                         }
 
                         PlasmaComponents.Label {
                             text: model.chargingDetail || ""
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                             opacity: 0.7
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
                             visible: text.length > 0
                         }
                     }
@@ -269,7 +290,8 @@ ColumnLayout {
                         PlasmaComponents.Label {
                             text: modelData.value
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
-                            wrapMode: Text.WordWrap
+                            wrapMode: Text.WrapAnywhere
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
                         }
                     }
@@ -290,6 +312,7 @@ ColumnLayout {
                     text: "Physical device name: " + (model.physicalName || "")
                     visible: (model.physicalName || "").length > 0
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.WrapAnywhere
                     Layout.fillWidth: true
                 }
 
