@@ -240,6 +240,15 @@ ColumnLayout {
                     Layout.fillWidth: true
                 }
 
+                PlasmaComponents.Label {
+                    text: "Relationship source: " + (model.physicalRelationshipSource || "")
+                    visible: model.physicalRelationshipType === "integrated_function"
+                             && (model.physicalRelationshipSource || "").length > 0
+                    opacity: 0.7
+                    font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    Layout.fillWidth: true
+                }
+
                 Repeater {
                     model: model.details || []
 

@@ -908,6 +908,8 @@ void DeviceModel::resolvePhysicalProfiles()
         device.physicalRootId = match.ambiguous ? QString() : match.physicalRootId;
         device.physicalMemberIds = match.ambiguous ? QStringList() : match.physicalMemberIds;
         device.physicalRelationshipType = match.ambiguous ? QString() : match.physicalRelationshipType;
+        device.physicalRelationshipSource = match.ambiguous ? QString() : match.physicalRelationshipSource;
+        device.physicalRelationshipEvidence = match.ambiguous ? QString() : match.physicalRelationshipEvidence;
         device.profilePhysicalName = device.physicalName;
         device.profilePhysicalVendor = device.physicalVendor;
         device.profilePhysicalIdentitySource = device.physicalIdentitySource;
@@ -928,6 +930,8 @@ void DeviceModel::resolvePhysicalProfiles()
             member.physicalConfidence = match.physicalConfidence;
             member.physicalType = match.physicalType;
             member.physicalRelationshipType = match.physicalChildRelationshipType;
+            member.physicalRelationshipSource = match.physicalRelationshipSource;
+            member.physicalRelationshipEvidence = match.physicalRelationshipEvidence;
             member.physicalIsComposite = true;
             member.profilePhysicalName = match.physicalName;
             member.profilePhysicalVendor = match.physicalVendor;
@@ -1033,6 +1037,8 @@ void DeviceModel::resolvePhysicalInstances()
                 {QStringLiteral("deviceClass"), member.deviceClass},
                 {QStringLiteral("primaryDriver"), member.primaryDriver},
                 {QStringLiteral("physicalRelationshipType"), member.physicalRelationshipType},
+                {QStringLiteral("physicalRelationshipSource"), member.physicalRelationshipSource},
+                {QStringLiteral("physicalRelationshipEvidence"), member.physicalRelationshipEvidence},
                 {QStringLiteral("topologyPort"), member.topologyPort}
             });
         }
@@ -1158,6 +1164,8 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case PhysicalMemberIdsRole: return device.physicalMemberIds;
     case PhysicalIntegratedMembersRole: return device.physicalIntegratedMembers;
     case PhysicalRelationshipTypeRole: return device.physicalRelationshipType;
+    case PhysicalRelationshipSourceRole: return device.physicalRelationshipSource;
+    case PhysicalRelationshipEvidenceRole: return device.physicalRelationshipEvidence;
     case PhysicalInstanceKeyRole: return device.physicalInstanceKey;
     case PhysicalInstanceKeySourceRole: return device.physicalInstanceKeySource;
     case PhysicalAliasIdentityAmbiguousRole: return device.physicalAliasIdentityAmbiguous;
@@ -1214,6 +1222,8 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {PhysicalRootIdRole,"physicalRootId"},{PhysicalMemberIdsRole,"physicalMemberIds"},
         {PhysicalIntegratedMembersRole,"physicalIntegratedMembers"},
         {PhysicalRelationshipTypeRole,"physicalRelationshipType"},
+        {PhysicalRelationshipSourceRole,"physicalRelationshipSource"},
+        {PhysicalRelationshipEvidenceRole,"physicalRelationshipEvidence"},
         {PhysicalInstanceKeyRole,"physicalInstanceKey"},{PhysicalInstanceKeySourceRole,"physicalInstanceKeySource"},
         {PhysicalAliasIdentityAmbiguousRole,"physicalAliasIdentityAmbiguous"}};
 }

@@ -140,6 +140,8 @@ public:
         PhysicalMemberIdsRole,
         PhysicalIntegratedMembersRole,
         PhysicalRelationshipTypeRole,
+        PhysicalRelationshipSourceRole,
+        PhysicalRelationshipEvidenceRole,
         PhysicalInstanceKeyRole,
         PhysicalInstanceKeySourceRole,
         PhysicalAliasIdentityAmbiguousRole,
@@ -209,6 +211,7 @@ private:
         bool presentationTreeHasChildren = false, presentationTreeIsLastChild = false;
         QString physicalName, physicalVendor, physicalIdentitySource, physicalConfidence;
         QString physicalProfileId, physicalType, physicalGroupId, physicalRootId, physicalRelationshipType;
+        QString physicalRelationshipSource, physicalRelationshipEvidence;
         QStringList physicalMemberIds;
         QVariantList physicalIntegratedMembers;
         bool physicalIsComposite = false;

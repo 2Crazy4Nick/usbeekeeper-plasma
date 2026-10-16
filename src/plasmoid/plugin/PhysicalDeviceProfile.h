@@ -49,6 +49,7 @@ struct PhysicalDeviceProfile {
     bool requireExactCompanionFunctions = false;
     QList<PhysicalChildRequirement> requiredChildren;
     QString requiredChildRelationshipType = QStringLiteral("integrated_function");
+    QString relationshipSource = QStringLiteral("profile");
     QString requiredInterfaceClass;
 };
 
@@ -65,6 +66,8 @@ struct PhysicalDeviceMatch {
     QStringList physicalMemberIds;
     QStringList physicalChildMemberIds;
     QString physicalChildRelationshipType;
+    QString physicalRelationshipSource;
+    QString physicalRelationshipEvidence;
     QString physicalRelationshipType;
     bool ambiguous = false;
 };

@@ -56,7 +56,25 @@ QList<PhysicalDeviceProfile> PhysicalDeviceProfileMatcher::profiles()
         QStringLiteral("4"),
         {},
     }};
-    return {generic, vl813};
+
+    PhysicalDeviceProfile via2817;
+    via2817.profileId = QStringLiteral("generic.via2817-integrated-lan-cardreader");
+    via2817.physicalType = QStringLiteral("hub_composite");
+    via2817.physicalIdentitySource = QStringLiteral("profile");
+    via2817.physicalConfidence = QStringLiteral("exact");
+    via2817.requireContainerId = true;
+    via2817.requireCompanionGroup = true;
+    via2817.requireExactCompanionFunctions = true;
+    via2817.requiredCompanionFunctions = {
+        {QStringLiteral("0x2109"), QStringLiteral("0x2817")},
+        {QStringLiteral("0x2109"), QStringLiteral("0x0817")},
+    };
+    via2817.requiredChildren = {
+        {{QStringLiteral("0x0bda"), QStringLiteral("0x8153")}, QStringLiteral("2"), {}},
+        {{QStringLiteral("0x058f"), QStringLiteral("0x8468")}, QStringLiteral("3"), {}},
+    };
+
+    return {generic, vl813, via2817};
 }
 
 bool PhysicalDeviceProfileMatcher::matches(const PhysicalDeviceProfile &profile,
@@ -174,6 +192,17 @@ PhysicalDeviceMatch PhysicalDeviceProfileMatcher::resolve(
                     }
                 }
             }
+        }
+        result.physicalRelationshipSource = profile.relationshipSource;
+        if (!result.physicalChildRelationshipType.isEmpty()) {
+            QStringList evidence;
+            for (const auto &requiredChild : profile.requiredChildren) {
+                evidence.append(QStringLiteral("Matched %1:%2 on logical downstream port %3")
+                                    .arg(requiredChild.identity.vendorId,
+                                         requiredChild.identity.productId,
+                                         requiredChild.logicalPort));
+            }
+            result.physicalRelationshipEvidence = evidence.join(QStringLiteral("; "));
         }
     }
     return result;
