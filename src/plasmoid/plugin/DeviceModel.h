@@ -109,6 +109,14 @@ public:
         Usb3PortsUsedRole,
         ReportedDownstreamPortsRole,
         ContainerIdRole,
+        TopologyIdRole,
+        TopologyParentIdRole,
+        TopologyDepthRole,
+        TopologyPortRole,
+        TopologyPathRole,
+        TopologyAliasesRole,
+        TopologyResolvedRole,
+        TopologyIssueRole,
     };
     Q_ENUM(Roles)
 
@@ -159,6 +167,12 @@ private:
         int usb3Speed = 0, usb3PortsTotal = 0, usb3PortsUsed = 0;
         int reportedDownstreamPorts = 0;
         QString containerId;
+        QString logicalPath, logicalParentPath, topologyId, topologyParentId, topologyPath;
+        QString topologyIssue;
+        QStringList logicalPaths, logicalParentPaths, logicalPortNumbers, topologyAliases;
+        int logicalRootBus = -1, logicalPortNumber = -1, topologyDepth = 0;
+        QString topologyPort;
+        bool topologyResolved = false;
         bool transportUsb2 = false, transportUsb3 = false;
         QString cableSpeed, cableCurrent, cableType, cableVendor;
         bool isHub = false, isConnected = false, hasPowerDelivery = false;
@@ -169,6 +183,7 @@ private:
 
     void loadSnapshot(const QString &json);
     void rebuildFiltered();
+    void resolveTopology();
 
     UsbeehiveClient m_client;
     QList<Device> m_devices;

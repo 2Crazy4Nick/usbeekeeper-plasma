@@ -2,6 +2,9 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QHash>
+#include <QSet>
+#include <QRegularExpression>
 #include <utility>
 
 namespace {
@@ -103,6 +106,41 @@ QString neutralManufacturer(QString value)
     value.replace(QStringLiteral(" Electronics Inc."), QString());
     value.replace(QStringLiteral(" Inc."), QString());
     return value.trimmed();
+}
+
+struct ParsedPort {
+    QString path;
+    QString parent;
+    int rootBus = -1;
+    int port = -1;
+    bool valid = false;
+};
+
+ParsedPort parsePortId(const QString &portId)
+{
+    const auto id = portId.trimmed();
+    static const QRegularExpression rootPattern(QStringLiteral(R"(^usb(\d+)-port(\d+)$)"));
+    static const QRegularExpression childPattern(QStringLiteral(R"(^((\d+)-(\d+(?:\.\d+)*))-port(\d+)$)"));
+
+    auto match = rootPattern.match(id);
+    if (match.hasMatch()) {
+        ParsedPort result;
+        result.rootBus = match.captured(1).toInt();
+        result.port = match.captured(2).toInt();
+        result.path = QStringLiteral("%1-%2").arg(result.rootBus).arg(result.port);
+        result.valid = result.rootBus > 0 && result.port > 0;
+        return result;
+    }
+
+    match = childPattern.match(id);
+    if (!match.hasMatch()) return {};
+    ParsedPort result;
+    result.parent = match.captured(1);
+    result.rootBus = match.captured(2).toInt();
+    result.port = match.captured(4).toInt();
+    result.path = QStringLiteral("%1.%2").arg(result.parent).arg(result.port);
+    result.valid = result.rootBus > 0 && result.port > 0;
+    return result;
 }
 
 QString resolveDisplayName(const QString &product, const QString &productDb,
@@ -226,6 +264,16 @@ void DeviceModel::loadSnapshot(const QString &json)
         device.transportUsb2 = firstProperty(object, {"transport.usb2"}) == QLatin1String("true");
         device.transportUsb3 = firstProperty(object, {"transport.usb3"}) == QLatin1String("true");
         device.portId = firstProperty(object, {"port.id"});
+        const auto parsedPort = parsePortId(device.portId);
+        if (parsedPort.valid) {
+            device.logicalPath = parsedPort.path;
+            device.logicalParentPath = parsedPort.parent;
+            device.logicalRootBus = parsedPort.rootBus;
+            device.logicalPortNumber = parsedPort.port;
+            device.logicalPaths = {parsedPort.path};
+            device.logicalParentPaths = {parsedPort.parent};
+            device.logicalPortNumbers = {QString::number(parsedPort.port)};
+        }
         device.portPeerId = firstProperty(object, {"port.peer_id"});
         device.portPeerState = firstProperty(object, {"port.peer_state"});
         device.portConnectType = firstProperty(object, {"port.connect_type"});
@@ -404,6 +452,19 @@ void DeviceModel::rebuildFiltered()
             group.dataRateDetail.clear();
         }
         group.containerId = usb2.containerId;
+        group.logicalPath = usb2.logicalPath;
+        group.logicalParentPath = usb2.logicalParentPath;
+        group.logicalRootBus = usb2.logicalRootBus;
+        group.logicalPortNumber = usb2.logicalPortNumber;
+        group.logicalPaths = usb2.logicalPaths;
+        group.logicalPaths.append(usb3.logicalPaths);
+        group.logicalPaths.removeDuplicates();
+        group.logicalParentPaths = usb2.logicalParentPaths;
+        group.logicalParentPaths.append(usb3.logicalParentPaths);
+        group.logicalParentPaths.removeDuplicates();
+        group.logicalPortNumbers = usb2.logicalPortNumbers;
+        group.logicalPortNumbers.append(usb3.logicalPortNumbers);
+        group.logicalPortNumbers.removeDuplicates();
         group.reportedDownstreamPorts = usb2.hubPortsTotal.toInt() > 0
             ? usb2.hubPortsTotal.toInt() : usb3.hubPortsTotal.toInt();
         group.details.clear();
@@ -469,8 +530,133 @@ void DeviceModel::rebuildFiltered()
         }
         m_filtered.append(device);
     }
+    resolveTopology();
     endResetModel();
     emit countChanged();
+}
+
+void DeviceModel::resolveTopology()
+{
+    QHash<QString, QList<int>> aliasOwners;
+    QHash<QString, QList<int>> idOwners;
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        device.topologyId.clear();
+        device.topologyParentId.clear();
+        device.topologyDepth = 0;
+        device.topologyPort.clear();
+        device.topologyPath = device.logicalPath;
+        device.topologyAliases = device.logicalPaths;
+        device.topologyResolved = false;
+        device.topologyIssue.clear();
+
+        if (device.topologyAliases.isEmpty()) {
+            device.topologyIssue = QStringLiteral("no valid port.id path");
+            continue;
+        }
+        if (device.isCompanionHubGroup && !device.containerId.isEmpty()) {
+            auto aliases = device.topologyAliases;
+            aliases.sort();
+            device.topologyId = QStringLiteral("group:%1:%2").arg(device.containerId, aliases.join(QLatin1Char('|')));
+        }
+        else if (!device.logicalPath.isEmpty())
+            device.topologyId = QStringLiteral("path:%1").arg(device.logicalPath);
+        else
+            device.topologyId = QStringLiteral("paths:%1").arg(device.topologyAliases.join(QLatin1Char('|')));
+
+        for (const auto &alias : device.topologyAliases)
+            aliasOwners[alias].append(i);
+        idOwners[device.topologyId].append(i);
+    }
+
+    auto markIssue = [this](int index, const QString &issue) {
+        auto &device = m_filtered[index];
+        device.topologyResolved = false;
+        device.topologyParentId.clear();
+        device.topologyDepth = 0;
+        if (device.topologyIssue.isEmpty()) device.topologyIssue = issue;
+    };
+
+    for (auto it = aliasOwners.cbegin(); it != aliasOwners.cend(); ++it) {
+        if (it.value().size() > 1) {
+            for (const auto index : it.value())
+                markIssue(index, QStringLiteral("logical alias claimed by multiple presentation devices: %1").arg(it.key()));
+        }
+    }
+    for (auto it = idOwners.cbegin(); it != idOwners.cend(); ++it) {
+        if (it.value().size() > 1) {
+            for (const auto index : it.value())
+                markIssue(index, QStringLiteral("duplicate topology identity: %1").arg(it.key()));
+        }
+    }
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        if (!device.topologyIssue.isEmpty()) continue;
+
+        QSet<QString> parentPaths;
+        for (const auto &parentPath : device.logicalParentPaths) {
+            if (!parentPath.isEmpty()) parentPaths.insert(parentPath);
+        }
+        if (parentPaths.isEmpty()) {
+            device.topologyResolved = true;
+            continue;
+        }
+
+        QSet<int> parentIndexes;
+        for (const auto &parentPath : parentPaths) {
+            const auto owners = aliasOwners.value(parentPath);
+            if (owners.size() != 1) {
+                markIssue(i, owners.isEmpty()
+                              ? QStringLiteral("parent path not found: %1").arg(parentPath)
+                              : QStringLiteral("parent path is ambiguous: %1").arg(parentPath));
+                break;
+            }
+            if (owners.first() == i) {
+                markIssue(i, QStringLiteral("self-referential topology parent: %1").arg(parentPath));
+                break;
+            }
+            parentIndexes.insert(owners.first());
+        }
+        if (!device.topologyIssue.isEmpty()) continue;
+        if (parentIndexes.size() != 1) {
+            markIssue(i, QStringLiteral("multiple presentation parents"));
+            continue;
+        }
+
+        const auto parentIndex = *parentIndexes.cbegin();
+        const auto &parent = m_filtered.at(parentIndex);
+        device.topologyParentId = parent.topologyId;
+        device.topologyResolved = true;
+        QSet<QString> ports;
+        for (const auto &port : device.logicalPortNumbers)
+            if (!port.isEmpty()) ports.insert(port);
+        if (ports.size() == 1) device.topologyPort = *ports.cbegin();
+    }
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        auto &device = m_filtered[i];
+        if (!device.topologyResolved || device.topologyParentId.isEmpty()) continue;
+        QSet<int> seen;
+        int current = i;
+        int depth = 0;
+        while (!m_filtered.at(current).topologyParentId.isEmpty()) {
+            if (seen.contains(current)) {
+                markIssue(i, QStringLiteral("topology cycle detected"));
+                break;
+            }
+            seen.insert(current);
+            const auto owners = idOwners.value(m_filtered.at(current).topologyParentId);
+            if (owners.size() != 1 || !m_filtered.at(owners.first()).topologyResolved) {
+                markIssue(i, QStringLiteral("topology parent is unresolved"));
+                break;
+            }
+            current = owners.first();
+            ++depth;
+        }
+        if (device.topologyResolved) device.topologyDepth = depth;
+    }
 }
 
 void DeviceModel::refresh() { m_client.refresh(); }
@@ -551,6 +737,10 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case Usb3SpeedLabelRole: return device.usb3SpeedLabel; case Usb3PortIdRole: return device.usb3PortId;
     case Usb3PortsTotalRole: return device.usb3PortsTotal; case Usb3PortsUsedRole: return device.usb3PortsUsed;
     case ReportedDownstreamPortsRole: return device.reportedDownstreamPorts; case ContainerIdRole: return device.containerId;
+    case TopologyIdRole: return device.topologyId; case TopologyParentIdRole: return device.topologyParentId;
+    case TopologyDepthRole: return device.topologyDepth; case TopologyPortRole: return device.topologyPort;
+    case TopologyPathRole: return device.topologyPath; case TopologyAliasesRole: return device.topologyAliases;
+    case TopologyResolvedRole: return device.topologyResolved; case TopologyIssueRole: return device.topologyIssue;
     }
     return {};
 }
@@ -587,7 +777,10 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {Usb2PortsUsedRole,"usb2PortsUsed"},{Usb3ProductRole,"usb3Product"},{Usb3VendorIdRole,"usb3VendorId"},
         {Usb3ProductIdRole,"usb3ProductId"},{Usb3SpeedRole,"usb3Speed"},{Usb3SpeedLabelRole,"usb3SpeedLabel"},
         {Usb3PortIdRole,"usb3PortId"},{Usb3PortsTotalRole,"usb3PortsTotal"},{Usb3PortsUsedRole,"usb3PortsUsed"},
-        {ReportedDownstreamPortsRole,"reportedDownstreamPorts"},{ContainerIdRole,"containerId"}};
+        {ReportedDownstreamPortsRole,"reportedDownstreamPorts"},{ContainerIdRole,"containerId"},
+        {TopologyIdRole,"topologyId"},{TopologyParentIdRole,"topologyParentId"},{TopologyDepthRole,"topologyDepth"},
+        {TopologyPortRole,"topologyPort"},{TopologyPathRole,"topologyPath"},{TopologyAliasesRole,"topologyAliases"},
+        {TopologyResolvedRole,"topologyResolved"},{TopologyIssueRole,"topologyIssue"}};
 }
 
 } // namespace WhatCable
