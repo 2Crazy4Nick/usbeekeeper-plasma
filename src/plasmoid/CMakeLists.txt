@@ -18,9 +18,22 @@ install(FILES plugin/qmldir DESTINATION ${QML_INSTALL_DIR})
 
 plasma_install_package(. org.kde.whatcable)
 
-# Build a kpackagetool6-installable package directory under build/
+# Build a kpackagetool6-installable package directory under build/. This is a
+# separate target so QML/configuration edits refresh the local package even
+# when the C++ plugin itself does not relink.
 set(PKG_DIR "${CMAKE_BINARY_DIR}/pkg/org.kde.whatcable")
-add_custom_command(TARGET whatcable-plasmoid-plugin POST_BUILD
+set(PKG_QML_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/metadata.json"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/main.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/CompactView.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/DeviceCard.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/PowerSourceList.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/config/config.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/config/main.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/config/ConfigGeneral.qml"
+)
+add_custom_target(whatcable-plasmoid-package ALL
+    DEPENDS whatcable-plasmoid-plugin ${PKG_QML_SOURCES}
     COMMAND ${CMAKE_COMMAND} -E make_directory "${PKG_DIR}/contents/ui"
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_CURRENT_SOURCE_DIR}/metadata.json" "${PKG_DIR}/metadata.json"
