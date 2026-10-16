@@ -1,4 +1,5 @@
 #include "DeviceModel.h"
+#include "PhysicalDeviceProfile.h"
 
 #include <algorithm>
 #include <functional>
@@ -752,6 +753,76 @@ void DeviceModel::resolveTopology()
                 device.topologyAncestorLastFlags.append(m_filtered.at(ancestorIndex).topologyIsLastChild);
         }
     }
+    resolvePhysicalProfiles();
+}
+
+void DeviceModel::resolvePhysicalProfiles()
+{
+    QList<PhysicalDeviceObservation> observations;
+    observations.reserve(m_filtered.size());
+    for (const auto &device : m_filtered) {
+        PhysicalDeviceObservation observation;
+        observation.topologyId = device.topologyId;
+        observation.topologyParentId = device.topologyParentId;
+        observation.topologyPort = device.topologyPort;
+        observation.vendorId = device.vendorId;
+        observation.productId = device.productId;
+        observation.vendor = device.vendor;
+        observation.productDb = device.productDb;
+        observation.containerId = device.containerId;
+        observation.deviceClass = device.deviceClass;
+        observation.deviceSubclass = device.deviceSubclass;
+        observation.interfaceClasses = {device.deviceClass, device.deviceSubclass};
+        observation.isCompanionHubGroup = device.isCompanionHubGroup;
+        if (device.isCompanionHubGroup) {
+            observation.companionFunctions = {
+                {device.usb2VendorId, device.usb2ProductId},
+                {device.usb3VendorId, device.usb3ProductId},
+            };
+        }
+        observations.append(observation);
+    }
+
+    QList<PhysicalDeviceMatch> matches;
+    matches.reserve(m_filtered.size());
+    for (const auto &observation : observations)
+        matches.append(PhysicalDeviceProfileMatcher::resolve(observation, observations));
+
+    QHash<QString, int> presentationIndexes;
+    for (int i = 0; i < m_filtered.size(); ++i)
+        presentationIndexes.insert(m_filtered.at(i).topologyId, i);
+
+    for (int i = 0; i < m_filtered.size(); ++i) {
+        const auto &match = matches.at(i);
+        auto &device = m_filtered[i];
+        device.physicalName = match.physicalName;
+        device.physicalVendor = match.physicalVendor;
+        device.physicalIdentitySource = match.ambiguous
+            ? QStringLiteral("none") : match.physicalIdentitySource;
+        device.physicalConfidence = match.ambiguous
+            ? QStringLiteral("none") : match.physicalConfidence;
+        device.physicalProfileId = match.ambiguous ? QString() : match.physicalProfileId;
+        device.physicalType = match.ambiguous ? QString() : match.physicalType;
+        device.physicalIsComposite = !match.ambiguous && match.physicalIsComposite;
+        device.physicalGroupId = match.ambiguous ? QString() : match.physicalGroupId;
+        device.physicalRootId = match.ambiguous ? QString() : match.physicalRootId;
+        device.physicalMemberIds = match.ambiguous ? QStringList() : match.physicalMemberIds;
+        device.physicalRelationshipType = match.ambiguous ? QString() : match.physicalRelationshipType;
+    }
+
+    for (const auto &match : matches) {
+        if (match.ambiguous || match.physicalGroupId.isEmpty()) continue;
+        for (const auto &memberId : match.physicalChildMemberIds) {
+            const auto memberIndex = presentationIndexes.value(memberId, -1);
+            if (memberIndex < 0) continue;
+            auto &member = m_filtered[memberIndex];
+            member.physicalGroupId = match.physicalGroupId;
+            member.physicalRootId = match.physicalRootId;
+            member.physicalMemberIds = match.physicalMemberIds;
+            member.physicalRelationshipType = match.physicalChildRelationshipType;
+            member.physicalIsComposite = true;
+        }
+    }
 }
 
 void DeviceModel::refresh() { m_client.refresh(); }
@@ -839,6 +910,13 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case TopologyHasChildrenRole: return device.topologyHasChildren;
     case TopologyIsLastChildRole: return device.topologyIsLastChild;
     case TopologyAncestorLastFlagsRole: return device.topologyAncestorLastFlags;
+    case PhysicalNameRole: return device.physicalName; case PhysicalVendorRole: return device.physicalVendor;
+    case PhysicalIdentitySourceRole: return device.physicalIdentitySource;
+    case PhysicalConfidenceRole: return device.physicalConfidence; case PhysicalProfileIdRole: return device.physicalProfileId;
+    case PhysicalIsCompositeRole: return device.physicalIsComposite; case PhysicalTypeRole: return device.physicalType;
+    case PhysicalGroupIdRole: return device.physicalGroupId; case PhysicalRootIdRole: return device.physicalRootId;
+    case PhysicalMemberIdsRole: return device.physicalMemberIds;
+    case PhysicalRelationshipTypeRole: return device.physicalRelationshipType;
     }
     return {};
 }
@@ -880,7 +958,13 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {TopologyPortRole,"topologyPort"},{TopologyPathRole,"topologyPath"},{TopologyAliasesRole,"topologyAliases"},
         {TopologyResolvedRole,"topologyResolved"},{TopologyIssueRole,"topologyIssue"},
         {TopologyHasChildrenRole,"topologyHasChildren"},{TopologyIsLastChildRole,"topologyIsLastChild"},
-        {TopologyAncestorLastFlagsRole,"topologyAncestorLastFlags"}};
+        {TopologyAncestorLastFlagsRole,"topologyAncestorLastFlags"},
+        {PhysicalNameRole,"physicalName"},{PhysicalVendorRole,"physicalVendor"},
+        {PhysicalIdentitySourceRole,"physicalIdentitySource"},{PhysicalConfidenceRole,"physicalConfidence"},
+        {PhysicalProfileIdRole,"physicalProfileId"},{PhysicalIsCompositeRole,"physicalIsComposite"},
+        {PhysicalTypeRole,"physicalType"},{PhysicalGroupIdRole,"physicalGroupId"},
+        {PhysicalRootIdRole,"physicalRootId"},{PhysicalMemberIdsRole,"physicalMemberIds"},
+        {PhysicalRelationshipTypeRole,"physicalRelationshipType"}};
 }
 
 } // namespace WhatCable

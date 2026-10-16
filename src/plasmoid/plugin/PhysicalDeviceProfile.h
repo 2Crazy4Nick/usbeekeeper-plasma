@@ -1,0 +1,81 @@
+#pragma once
+
+#include <QList>
+#include <QString>
+#include <QStringList>
+
+namespace WhatCable {
+
+struct PhysicalVidPid {
+    QString vendorId;
+    QString productId;
+};
+
+struct PhysicalChildRequirement {
+    PhysicalVidPid identity;
+    QString logicalPort;
+    QString interfaceClass;
+};
+
+struct PhysicalDeviceObservation {
+    QString topologyId;
+    QString topologyParentId;
+    QString topologyPort;
+    QString vendorId;
+    QString productId;
+    QString vendor;
+    QString productDb;
+    QString containerId;
+    QString deviceClass;
+    QString deviceSubclass;
+    QStringList interfaceClasses;
+    bool isCompanionHubGroup = false;
+    QList<PhysicalVidPid> companionFunctions;
+};
+
+struct PhysicalDeviceProfile {
+    QString profileId;
+    QString physicalType;
+    QString physicalName;
+    QString physicalVendor;
+    QString requiredManufacturer;
+    QString requiredProductDb;
+    bool requireContainerId = false;
+    bool requireCompanionGroup = false;
+    QList<PhysicalVidPid> requiredParentFunctions;
+    QList<PhysicalVidPid> requiredCompanionFunctions;
+    QList<PhysicalChildRequirement> requiredChildren;
+    QString requiredChildRelationshipType = QStringLiteral("integrated_function");
+    QString requiredInterfaceClass;
+};
+
+struct PhysicalDeviceMatch {
+    QString physicalName;
+    QString physicalVendor;
+    QString physicalIdentitySource = QStringLiteral("none");
+    QString physicalConfidence = QStringLiteral("none");
+    QString physicalProfileId;
+    QString physicalType;
+    bool physicalIsComposite = false;
+    QString physicalGroupId;
+    QString physicalRootId;
+    QStringList physicalMemberIds;
+    QStringList physicalChildMemberIds;
+    QString physicalChildRelationshipType;
+    QString physicalRelationshipType;
+    bool ambiguous = false;
+};
+
+class PhysicalDeviceProfileMatcher {
+public:
+    static PhysicalDeviceMatch resolve(const PhysicalDeviceObservation &candidate,
+                                       const QList<PhysicalDeviceObservation> &allDevices);
+
+private:
+    static QList<PhysicalDeviceProfile> profiles();
+    static bool matches(const PhysicalDeviceProfile &profile,
+                        const PhysicalDeviceObservation &candidate,
+                        const QList<PhysicalDeviceObservation> &allDevices);
+};
+
+} // namespace WhatCable

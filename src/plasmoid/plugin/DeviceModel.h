@@ -120,6 +120,17 @@ public:
         TopologyHasChildrenRole,
         TopologyIsLastChildRole,
         TopologyAncestorLastFlagsRole,
+        PhysicalNameRole,
+        PhysicalVendorRole,
+        PhysicalIdentitySourceRole,
+        PhysicalConfidenceRole,
+        PhysicalProfileIdRole,
+        PhysicalIsCompositeRole,
+        PhysicalTypeRole,
+        PhysicalGroupIdRole,
+        PhysicalRootIdRole,
+        PhysicalMemberIdsRole,
+        PhysicalRelationshipTypeRole,
     };
     Q_ENUM(Roles)
 
@@ -177,6 +188,10 @@ private:
         int logicalRootBus = -1, logicalPortNumber = -1, topologyDepth = 0;
         QString topologyPort;
         bool topologyResolved = false, topologyHasChildren = false, topologyIsLastChild = false;
+        QString physicalName, physicalVendor, physicalIdentitySource, physicalConfidence;
+        QString physicalProfileId, physicalType, physicalGroupId, physicalRootId, physicalRelationshipType;
+        QStringList physicalMemberIds;
+        bool physicalIsComposite = false;
         bool transportUsb2 = false, transportUsb3 = false;
         QString cableSpeed, cableCurrent, cableType, cableVendor;
         bool isHub = false, isConnected = false, hasPowerDelivery = false;
@@ -188,6 +203,7 @@ private:
     void loadSnapshot(const QString &json);
     void rebuildFiltered();
     void resolveTopology();
+    void resolvePhysicalProfiles();
 
     UsbeehiveClient m_client;
     QList<Device> m_devices;

@@ -1,6 +1,7 @@
 add_library(whatcable-plasmoid-plugin SHARED
     plugin/WhatCablePlugin.cpp
     plugin/DeviceModel.cpp
+    plugin/PhysicalDeviceProfile.cpp
     plugin/UsbeehiveClient.cpp
 )
 
