@@ -38,12 +38,15 @@ struct PhysicalDeviceProfile {
     QString physicalType;
     QString physicalName;
     QString physicalVendor;
+    QString physicalIdentitySource = QStringLiteral("deterministic");
+    QString physicalConfidence = QStringLiteral("none");
     QString requiredManufacturer;
     QString requiredProductDb;
     bool requireContainerId = false;
     bool requireCompanionGroup = false;
     QList<PhysicalVidPid> requiredParentFunctions;
     QList<PhysicalVidPid> requiredCompanionFunctions;
+    bool requireExactCompanionFunctions = false;
     QList<PhysicalChildRequirement> requiredChildren;
     QString requiredChildRelationshipType = QStringLiteral("integrated_function");
     QString requiredInterfaceClass;

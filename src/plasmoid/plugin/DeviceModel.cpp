@@ -819,6 +819,10 @@ void DeviceModel::resolvePhysicalProfiles()
             member.physicalGroupId = match.physicalGroupId;
             member.physicalRootId = match.physicalRootId;
             member.physicalMemberIds = match.physicalMemberIds;
+            member.physicalProfileId = match.physicalProfileId;
+            member.physicalIdentitySource = match.physicalIdentitySource;
+            member.physicalConfidence = match.physicalConfidence;
+            member.physicalType = match.physicalType;
             member.physicalRelationshipType = match.physicalChildRelationshipType;
             member.physicalIsComposite = true;
         }

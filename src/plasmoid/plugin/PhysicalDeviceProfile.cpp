@@ -33,21 +33,30 @@ QList<PhysicalDeviceProfile> PhysicalDeviceProfileMatcher::profiles()
 {
     // This generic profile describes only a deterministic physical type.  It
     // deliberately makes no retail-product claim.
-    return {{
-        QStringLiteral("generic.companion-usb-hub"),
-        QStringLiteral("hub"),
-        {},
-        {},
-        {},
-        {},
-        true,
-        true,
-        {},
-        {},
-        {},
-        {},
+    PhysicalDeviceProfile generic;
+    generic.profileId = QStringLiteral("generic.companion-usb-hub");
+    generic.physicalType = QStringLiteral("hub");
+    generic.requireContainerId = true;
+    generic.requireCompanionGroup = true;
+
+    PhysicalDeviceProfile vl813;
+    vl813.profileId = QStringLiteral("generic.vl813-integrated-audio");
+    vl813.physicalType = QStringLiteral("hub_audio");
+    vl813.physicalIdentitySource = QStringLiteral("profile");
+    vl813.physicalConfidence = QStringLiteral("exact");
+    vl813.requireContainerId = true;
+    vl813.requireCompanionGroup = true;
+    vl813.requireExactCompanionFunctions = true;
+    vl813.requiredCompanionFunctions = {
+        {QStringLiteral("0x2109"), QStringLiteral("0x2813")},
+        {QStringLiteral("0x2109"), QStringLiteral("0x0813")},
+    };
+    vl813.requiredChildren = {{
+        {QStringLiteral("0x0d8c"), QStringLiteral("0x0014")},
+        QStringLiteral("4"),
         {},
     }};
+    return {generic, vl813};
 }
 
 bool PhysicalDeviceProfileMatcher::matches(const PhysicalDeviceProfile &profile,
@@ -68,6 +77,9 @@ bool PhysicalDeviceProfileMatcher::matches(const PhysicalDeviceProfile &profile,
     for (const auto &required : profile.requiredCompanionFunctions) {
         if (!hasFunction(candidate.companionFunctions, required)) return false;
     }
+    if (profile.requireExactCompanionFunctions
+        && candidate.companionFunctions.size() != profile.requiredCompanionFunctions.size())
+        return false;
 
     for (const auto &requiredParent : profile.requiredParentFunctions) {
         bool parentMatched = false;
@@ -104,16 +116,46 @@ PhysicalDeviceMatch PhysicalDeviceProfileMatcher::resolve(
     }
 
     PhysicalDeviceMatch result;
-    if (matchesFound.size() > 1) {
+    int bestSpecificity = -1;
+    for (const auto &profile : matchesFound) {
+        int specificity = 0;
+        specificity += profile.requireCompanionGroup ? 1 : 0;
+        specificity += profile.requireContainerId ? 1 : 0;
+        specificity += profile.requireExactCompanionFunctions ? 1 : 0;
+        specificity += profile.requiredCompanionFunctions.size();
+        specificity += profile.requiredParentFunctions.size();
+        specificity += profile.requiredChildren.size();
+        specificity += !profile.requiredManufacturer.isEmpty() ? 1 : 0;
+        specificity += !profile.requiredProductDb.isEmpty() ? 1 : 0;
+        specificity += !profile.requiredInterfaceClass.isEmpty() ? 1 : 0;
+        bestSpecificity = qMax(bestSpecificity, specificity);
+    }
+    QList<PhysicalDeviceProfile> bestMatches;
+    for (const auto &profile : matchesFound) {
+        int specificity = 0;
+        specificity += profile.requireCompanionGroup ? 1 : 0;
+        specificity += profile.requireContainerId ? 1 : 0;
+        specificity += profile.requireExactCompanionFunctions ? 1 : 0;
+        specificity += profile.requiredCompanionFunctions.size();
+        specificity += profile.requiredParentFunctions.size();
+        specificity += profile.requiredChildren.size();
+        specificity += !profile.requiredManufacturer.isEmpty() ? 1 : 0;
+        specificity += !profile.requiredProductDb.isEmpty() ? 1 : 0;
+        specificity += !profile.requiredInterfaceClass.isEmpty() ? 1 : 0;
+        if (specificity == bestSpecificity) bestMatches.append(profile);
+    }
+    if (bestMatches.size() > 1) {
         result.ambiguous = true;
         return result;
     }
-    if (matchesFound.size() == 1) {
-        const auto &profile = matchesFound.first();
+    if (bestMatches.size() == 1) {
+        const auto &profile = bestMatches.first();
         result.physicalName = profile.physicalName;
         result.physicalVendor = profile.physicalVendor;
-        result.physicalIdentitySource = profile.physicalName.isEmpty()
-            ? QStringLiteral("deterministic") : QStringLiteral("profile");
+        result.physicalIdentitySource = profile.physicalIdentitySource;
+        // "exact" describes an exact structural-profile match, never a
+        // claim that a retail product/model has been identified.
+        result.physicalConfidence = profile.physicalConfidence;
         result.physicalProfileId = profile.profileId;
         result.physicalType = profile.physicalType;
         result.physicalIsComposite = candidate.isCompanionHubGroup || !profile.requiredChildren.isEmpty();
