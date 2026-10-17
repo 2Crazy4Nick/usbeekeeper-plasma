@@ -9,6 +9,10 @@
 
 namespace WhatCable {
 
+bool topologySiblingLess(int leftPort, bool leftKnown, int rightPort, bool rightKnown);
+bool isTrustworthyUsbSerial(const QString &serial);
+QString selectCompanionSerial(const QString &usb2Serial, const QString &usb3Serial);
+
 class DeviceModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
@@ -16,6 +20,8 @@ class DeviceModel : public QAbstractListModel {
     Q_PROPERTY(bool showEmptyPorts READ showEmptyPorts WRITE setShowEmptyPorts NOTIFY showEmptyPortsChanged)
     Q_PROPERTY(bool showTopologyTree READ showTopologyTree WRITE setShowTopologyTree NOTIFY showTopologyTreeChanged)
     Q_PROPERTY(QString userAliasesJson READ userAliasesJson WRITE setUserAliasesJson NOTIFY userAliasesChanged)
+    Q_PROPERTY(bool backendAvailable READ backendAvailable NOTIFY backendAvailableChanged)
+    Q_PROPERTY(QString snapshotError READ snapshotError NOTIFY snapshotErrorChanged)
 
 public:
     enum Roles {
@@ -162,6 +168,8 @@ public:
     void setShowTopologyTree(bool v);
     QString userAliasesJson() const { return m_userAliasesJson; }
     void setUserAliasesJson(const QString &value);
+    bool backendAvailable() const { return m_backendAvailable; }
+    QString snapshotError() const { return m_snapshotError; }
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void startMonitoring();
@@ -172,6 +180,8 @@ signals:
     void showEmptyPortsChanged();
     void showTopologyTreeChanged();
     void userAliasesChanged();
+    void backendAvailableChanged();
+    void snapshotErrorChanged();
 
 private:
     struct Device {
@@ -180,6 +190,7 @@ private:
         int status = 0, speed = 0, maxPower = 0, portNumber = -1, cableMaxWatts = 0, maxSourcePower = 0;
         QString vendorId, productId, speedLabel, usbVersion, dataRole, powerRole;
         QString deviceClass, deviceSubclass, primaryDriver, vendor, manufacturer, product, serial;
+        QStringList interfaceClasses;
         QString displayName, displayVendor, identitySource;
         QString linkSummary, dataRateSummary, dataRateDetail, dataRateVerdict;
         int dataRateCapable = 0, dataRateNegotiated = 0;
@@ -227,6 +238,8 @@ private:
     };
 
     void loadSnapshot(const QString &json);
+    void clearSnapshot(const QString &error, bool available);
+    void reportSnapshotError(const QString &error, bool available);
     void rebuildFiltered();
     void resolveTopology();
     void resolvePresentationTree();
@@ -236,11 +249,14 @@ private:
     UsbeehiveClient m_client;
     QList<Device> m_devices;
     QList<Device> m_filtered;
+    QList<Device> m_visible;
     bool m_showHubs = false;
     bool m_showEmptyPorts = false;
     bool m_showTopologyTree = false;
     QString m_userAliasesJson = QStringLiteral("{}");
     QHash<QString, QString> m_userAliases;
+    bool m_backendAvailable = false;
+    QString m_snapshotError;
 };
 
 } // namespace WhatCable

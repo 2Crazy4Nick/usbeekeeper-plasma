@@ -19,7 +19,13 @@ PlasmoidItem {
 
     function updatePhysicalAlias(key, alias) {
         var aliases = {}
-        try { aliases = JSON.parse(Plasmoid.configuration.physicalAliases || "{}") } catch (error) { aliases = {} }
+        try {
+            var parsed = JSON.parse(Plasmoid.configuration.physicalAliases || "{}")
+            if (parsed !== null && !Array.isArray(parsed) && typeof parsed === "object")
+                aliases = parsed
+        } catch (error) {
+            aliases = {}
+        }
         if ((alias || "").trim().length > 0)
             aliases[key] = alias.trim()
         else

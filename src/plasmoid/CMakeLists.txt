@@ -83,4 +83,18 @@ if(BUILD_TESTING)
     target_link_libraries(physical_profile_match_tests PRIVATE
         whatcable-plasmoid-plugin Qt6::Core)
     add_test(NAME physical_profile_match_tests COMMAND physical_profile_match_tests)
+
+    add_executable(device_model_regression_tests
+        "${CMAKE_SOURCE_DIR}/tests/device_model_regression_test.cpp"
+        plugin/DeviceModel.cpp
+        plugin/PhysicalDeviceProfile.cpp
+        plugin/UsbeehiveClient.cpp)
+    qt_add_resources(device_model_regression_tests physical_profiles_model_test
+        PREFIX "/org/kde/whatcable/profiles"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/profiles"
+        FILES ${PROFILE_FILES})
+    target_include_directories(device_model_regression_tests PRIVATE plugin)
+    target_link_libraries(device_model_regression_tests PRIVATE
+        Qt6::Core Qt6::DBus Qt6::Quick)
+    add_test(NAME device_model_regression_tests COMMAND device_model_regression_tests)
 endif()

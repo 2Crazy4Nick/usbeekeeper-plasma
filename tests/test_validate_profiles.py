@@ -26,7 +26,17 @@ class ProfileValidatorTests(unittest.TestCase):
         }
 
     def test_bundled_profiles_load(self):
-        self.assertEqual(validate_profiles.validate_directory(ROOT / "src/plasmoid/profiles"), 3)
+        directory = ROOT / "src/plasmoid/profiles"
+        expected = len([path for path in directory.glob("*.json") if path.name != "schema.json"])
+        self.assertEqual(validate_profiles.validate_directory(directory), expected)
+
+    def test_schema_contains_structural_profile_constraints(self):
+        schema = json.loads((ROOT / "src/plasmoid/profiles/schema.json").read_text())
+        root = schema["$defs"]["root"]
+        self.assertTrue(root["properties"]["companionFunctions"]["uniqueItems"])
+        self.assertTrue(root["properties"]["parentFunctions"]["uniqueItems"])
+        self.assertTrue(root["allOf"])
+        self.assertTrue(root["anyOf"])
 
     def test_bad_cases(self):
         cases = []
@@ -44,6 +54,72 @@ class ProfileValidatorTests(unittest.TestCase):
                 path = self.write(directory, f"bad{i}.json", case)
                 with self.assertRaises(ValueError):
                     validate_profiles.validate(path)
+
+    def test_wrong_optional_types_are_rejected(self):
+        malformed = [
+            ("logicalPort", None),
+            ("logicalPort", 4),
+            ("interfaceClass", []),
+        ]
+        for field, value in malformed:
+            with self.subTest(field=field, value=value):
+                profile = self.valid()
+                profile["members"][0]["match"][field] = value
+                with tempfile.TemporaryDirectory() as temp:
+                    with self.assertRaises(ValueError):
+                        validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+    def test_logical_port_canonical_range(self):
+        for port in ("1", "2", "255"):
+            with self.subTest(port=port):
+                profile = self.valid()
+                profile["members"][0]["match"]["logicalPort"] = port
+                with tempfile.TemporaryDirectory() as temp:
+                    validate_profiles.validate(self.write(Path(temp), "valid.json", profile))
+
+        for port in ("", "0", "01", "+1", "-1", "256", None, 1):
+            with self.subTest(port=port):
+                profile = self.valid()
+                profile["members"][0]["match"]["logicalPort"] = port
+                with tempfile.TemporaryDirectory() as temp:
+                    with self.assertRaises(ValueError):
+                        validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+    def test_duplicate_parent_functions_are_rejected(self):
+        profile = self.valid()
+        function = {"vid": "2109", "pid": "2817"}
+        profile["root"]["parentFunctions"] = [function, function]
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(ValueError):
+                validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+    def test_non_string_relationship_is_rejected_cleanly(self):
+        profile = self.valid()
+        profile["members"][0]["relationship"] = []
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(ValueError):
+                validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+        for field, value in (("manufacturer", []), ("physicalName", {}),
+                             ("schemaVersion", True)):
+            with self.subTest(field=field, value=value):
+                profile = self.valid()
+                if field == "schemaVersion":
+                    profile[field] = value
+                elif field == "physicalName":
+                    profile[field] = value
+                else:
+                    profile["root"][field] = value
+                with tempfile.TemporaryDirectory() as temp:
+                    with self.assertRaises(ValueError):
+                        validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+    def test_unknown_optional_enum_is_rejected(self):
+        profile = self.valid()
+        profile["physicalConfidence"] = "certain"
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(ValueError):
+                validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
 
     def test_duplicate_ids(self):
         with tempfile.TemporaryDirectory() as temp:

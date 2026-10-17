@@ -37,12 +37,33 @@
         "requireCompanionGroup": { "type": "boolean" },
         "requireContainerId": { "type": "boolean" },
         "exactCompanionFunctions": { "type": "boolean" },
-        "companionFunctions": { "type": "array", "items": { "$ref": "#/$defs/vidPid" } },
-        "parentFunctions": { "type": "array", "items": { "$ref": "#/$defs/vidPid" } },
+        "companionFunctions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/vidPid" } },
+        "parentFunctions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/vidPid" } },
         "manufacturer": { "type": "string" },
         "productDb": { "type": "string" },
         "interfaceClass": { "type": "string" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["exactCompanionFunctions"],
+            "properties": { "exactCompanionFunctions": { "const": true } }
+          },
+          "then": {
+            "required": ["companionFunctions"],
+            "properties": { "companionFunctions": { "minItems": 2, "maxItems": 2 } }
+          }
+        }
+      ],
+      "anyOf": [
+        { "required": ["requireCompanionGroup"], "properties": { "requireCompanionGroup": { "const": true } } },
+        { "required": ["requireContainerId"], "properties": { "requireContainerId": { "const": true } } },
+        { "required": ["companionFunctions"], "properties": { "companionFunctions": { "minItems": 1 } } },
+        { "required": ["parentFunctions"], "properties": { "parentFunctions": { "minItems": 1 } } },
+        { "required": ["manufacturer"], "properties": { "manufacturer": { "minLength": 1 } } },
+        { "required": ["productDb"], "properties": { "productDb": { "minLength": 1 } } },
+        { "required": ["interfaceClass"], "properties": { "interfaceClass": { "minLength": 1 } } }
+      ]
     },
     "member": {
       "type": "object",
@@ -56,7 +77,7 @@
           "properties": {
             "vid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
             "pid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
-            "logicalPort": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "logicalPort": { "type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$" },
             "interfaceClass": { "type": "string" }
           }
         },

@@ -75,8 +75,8 @@ bool parseArrayOfIds(const QJsonValue &value, QList<PhysicalVidPid> *result,
     return true;
 }
 
-bool parseProfile(const QByteArray &data, const QString &filename,
-                  PhysicalDeviceProfile *profile)
+bool parseProfileData(const QByteArray &data, const QString &filename,
+                      PhysicalDeviceProfile *profile)
 {
     QJsonParseError error;
     const auto document = QJsonDocument::fromJson(data, &error);
@@ -91,7 +91,8 @@ bool parseProfile(const QByteArray &data, const QString &filename,
                                   QStringLiteral("physicalIdentitySource"), QStringLiteral("physicalConfidence"),
                                   QStringLiteral("relationshipSource"), QStringLiteral("root"),
                                   QStringLiteral("members")}, filename)) return false;
-    if (object.value(QStringLiteral("schemaVersion")).toInt(-1) != 1) {
+    const auto schemaVersion = object.value(QStringLiteral("schemaVersion"));
+    if (!schemaVersion.isDouble() || schemaVersion.toDouble() != 1.0) {
         qWarning().noquote() << filename << "unsupported schemaVersion" << object.value(QStringLiteral("schemaVersion"));
         return false;
     }
@@ -108,6 +109,30 @@ bool parseProfile(const QByteArray &data, const QString &filename,
         QStringLiteral("manufacturer"), QStringLiteral("productDb"),
         QStringLiteral("interfaceClass")}, filename)) return false;
 
+    for (const auto &key : {QStringLiteral("description"), QStringLiteral("physicalType"),
+                            QStringLiteral("physicalName"), QStringLiteral("physicalVendor"),
+                            QStringLiteral("physicalIdentitySource"), QStringLiteral("physicalConfidence"),
+                            QStringLiteral("relationshipSource")}) {
+        if (object.contains(key) && !object.value(key).isString()) {
+            qWarning().noquote() << filename << key << "must be a string";
+            return false;
+        }
+    }
+    for (const auto &key : {QStringLiteral("requireCompanionGroup"), QStringLiteral("requireContainerId"),
+                            QStringLiteral("exactCompanionFunctions")}) {
+        if (root.contains(key) && !root.value(key).isBool()) {
+            qWarning().noquote() << filename << key << "must be a boolean";
+            return false;
+        }
+    }
+    for (const auto &key : {QStringLiteral("manufacturer"), QStringLiteral("productDb"),
+                            QStringLiteral("interfaceClass")}) {
+        if (root.contains(key) && !root.value(key).isString()) {
+            qWarning().noquote() << filename << key << "must be a string";
+            return false;
+        }
+    }
+
     PhysicalDeviceProfile parsed;
     parsed.profileId = id;
     parsed.physicalType = object.value(QStringLiteral("physicalType")).toString();
@@ -116,6 +141,15 @@ bool parseProfile(const QByteArray &data, const QString &filename,
     parsed.physicalIdentitySource = object.value(QStringLiteral("physicalIdentitySource")).toString(QStringLiteral("deterministic"));
     parsed.physicalConfidence = object.value(QStringLiteral("physicalConfidence")).toString(QStringLiteral("none"));
     parsed.relationshipSource = object.value(QStringLiteral("relationshipSource")).toString(QStringLiteral("profile"));
+    if (!QSet<QString>{QStringLiteral("none"), QStringLiteral("profile"), QStringLiteral("user"), QStringLiteral("deterministic")}
+            .contains(parsed.physicalIdentitySource)
+        || !QSet<QString>{QStringLiteral("none"), QStringLiteral("possible"), QStringLiteral("probable"), QStringLiteral("exact")}
+            .contains(parsed.physicalConfidence)
+        || !QSet<QString>{QStringLiteral("none"), QStringLiteral("hardware"), QStringLiteral("profile"), QStringLiteral("user")}
+            .contains(parsed.relationshipSource)) {
+        qWarning().noquote() << filename << "invalid physical metadata enum";
+        return false;
+    }
     parsed.requireCompanionGroup = root.value(QStringLiteral("requireCompanionGroup")).toBool(false);
     parsed.requireContainerId = root.value(QStringLiteral("requireContainerId")).toBool(false);
     parsed.requireExactCompanionFunctions = root.value(QStringLiteral("exactCompanionFunctions")).toBool(false);
@@ -150,11 +184,13 @@ bool parseProfile(const QByteArray &data, const QString &filename,
         if (!entry.isObject() || !objectKeysKnown(entry.toObject(),
             {QStringLiteral("match"), QStringLiteral("relationship"), QStringLiteral("required")}, filename)) return false;
         const auto member = entry.toObject();
-        if (!member.value(QStringLiteral("required")).toBool(false)) {
+        if (!member.value(QStringLiteral("required")).isBool()
+            || !member.value(QStringLiteral("required")).toBool()) {
             qWarning().noquote() << filename << "members must be required";
             return false;
         }
-        if (member.value(QStringLiteral("relationship")).toString() != QStringLiteral("integrated_function")) {
+        if (!member.value(QStringLiteral("relationship")).isString()
+            || member.value(QStringLiteral("relationship")).toString() != QStringLiteral("integrated_function")) {
             qWarning().noquote() << filename << "unsupported relationship"
                                   << member.value(QStringLiteral("relationship"));
             return false;
@@ -166,14 +202,21 @@ bool parseProfile(const QByteArray &data, const QString &filename,
         if (!parseVidPid(QJsonObject{{QStringLiteral("vid"), match.value(QStringLiteral("vid"))},
                                     {QStringLiteral("pid"), match.value(QStringLiteral("pid"))}},
                          &child.identity, filename)) return false;
+        if (match.contains(QStringLiteral("logicalPort"))
+            && !match.value(QStringLiteral("logicalPort")).isString()) {
+            qWarning().noquote() << filename << "logicalPort must be a string";
+            return false;
+        }
+        if (match.contains(QStringLiteral("interfaceClass"))
+            && !match.value(QStringLiteral("interfaceClass")).isString()) {
+            qWarning().noquote() << filename << "interfaceClass must be a string";
+            return false;
+        }
         child.logicalPort = match.value(QStringLiteral("logicalPort")).toString();
-        bool portOk = false;
-        if (!child.logicalPort.isEmpty()) {
-            const int port = child.logicalPort.toInt(&portOk);
-            if (!portOk || port <= 0) {
-                qWarning().noquote() << filename << "invalid logicalPort" << child.logicalPort;
-                return false;
-            }
+        if (match.contains(QStringLiteral("logicalPort"))
+            && !isCanonicalLogicalPort(child.logicalPort)) {
+            qWarning().noquote() << filename << "invalid logicalPort" << child.logicalPort;
+            return false;
         }
         child.interfaceClass = match.value(QStringLiteral("interfaceClass")).toString();
         const auto key = child.identity.vendorId + QLatin1Char(':') + child.identity.productId
@@ -214,11 +257,41 @@ bool matchesChild(const PhysicalChildRequirement &required,
 
 } // namespace
 
+bool isCanonicalLogicalPort(const QString &port)
+{
+    static const QRegularExpression decimal(QStringLiteral("^[1-9][0-9]{0,2}$"));
+    if (!decimal.match(port).hasMatch()) return false;
+    bool ok = false;
+    const auto value = port.toUInt(&ok, 10);
+    return ok && value >= 1 && value <= 255;
+}
+
+bool PhysicalDeviceProfileMatcher::parseProfile(const QByteArray &data, const QString &filename,
+                                                 PhysicalDeviceProfile *profile)
+{
+    return parseProfileData(data, filename, profile);
+}
+
+QList<PhysicalDeviceProfile> PhysicalDeviceProfileMatcher::rejectDuplicateProfileIds(
+    const QList<PhysicalDeviceProfile> &profiles)
+{
+    QHash<QString, int> idCounts;
+    for (const auto &profile : profiles) ++idCounts[profile.profileId];
+    QList<PhysicalDeviceProfile> unique;
+    for (const auto &profile : profiles) {
+        if (idCounts.value(profile.profileId) != 1) {
+            qWarning().noquote() << "duplicate profile id rejected" << profile.profileId;
+            continue;
+        }
+        unique.append(profile);
+    }
+    return unique;
+}
+
 QList<PhysicalDeviceProfile> PhysicalDeviceProfileMatcher::profiles()
 {
     static const auto loaded = [] {
         QList<PhysicalDeviceProfile> result;
-        QSet<QString> ids;
         const QDir directory(QStringLiteral(":/org/kde/whatcable/profiles"));
         for (const auto &filename : directory.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
             if (filename == QStringLiteral("schema.json")) continue;
@@ -229,14 +302,9 @@ QList<PhysicalDeviceProfile> PhysicalDeviceProfileMatcher::profiles()
             }
             PhysicalDeviceProfile profile;
             if (!parseProfile(file.readAll(), filename, &profile)) continue;
-            if (ids.contains(profile.profileId)) {
-                qWarning().noquote() << filename << "duplicate profile id" << profile.profileId;
-                continue;
-            }
-            ids.insert(profile.profileId);
             result.append(profile);
         }
-        return result;
+        return rejectDuplicateProfileIds(result);
     }();
     return loaded;
 }
@@ -248,7 +316,7 @@ bool PhysicalDeviceProfileMatcher::matches(const PhysicalDeviceProfile &profile,
     if (profile.requireCompanionGroup && !candidate.isCompanionHubGroup) return false;
     if (profile.requireContainerId && candidate.containerId.isEmpty()) return false;
     if (!profile.requiredManufacturer.isEmpty()
-        && candidate.vendor.compare(profile.requiredManufacturer, Qt::CaseInsensitive) != 0)
+        && candidate.manufacturer.compare(profile.requiredManufacturer, Qt::CaseInsensitive) != 0)
         return false;
     if (!profile.requiredProductDb.isEmpty()
         && candidate.productDb.compare(profile.requiredProductDb, Qt::CaseInsensitive) != 0)
@@ -292,8 +360,16 @@ PhysicalDeviceMatch PhysicalDeviceProfileMatcher::resolve(
     const PhysicalDeviceObservation &candidate,
     const QList<PhysicalDeviceObservation> &allDevices)
 {
+    return resolveWithProfiles(candidate, allDevices, profiles());
+}
+
+PhysicalDeviceMatch PhysicalDeviceProfileMatcher::resolveWithProfiles(
+    const PhysicalDeviceObservation &candidate,
+    const QList<PhysicalDeviceObservation> &allDevices,
+    const QList<PhysicalDeviceProfile> &availableProfiles)
+{
     QList<PhysicalDeviceProfile> matchesFound;
-    for (const auto &profile : profiles()) {
+    for (const auto &profile : availableProfiles) {
         if (matches(profile, candidate, allDevices)) matchesFound.append(profile);
     }
 

@@ -13,6 +13,7 @@ RELATIONSHIPS = {"integrated_function"}
 RELATIONSHIP_SOURCES = {"none", "hardware", "profile", "user"}
 IDENTITY_SOURCES = {"none", "profile", "user", "deterministic"}
 CONFIDENCES = {"none", "possible", "probable", "exact"}
+LOGICAL_PORT = re.compile(r"^[1-9][0-9]{0,2}$")
 
 
 def fail(path, message):
@@ -42,10 +43,16 @@ def validate(path):
     object_only(data, {"schemaVersion", "id", "description", "physicalType", "physicalName",
                        "physicalVendor", "physicalIdentitySource", "physicalConfidence",
                        "relationshipSource", "root", "members"}, path)
-    if data.get("schemaVersion") != 1:
+    schema_version = data.get("schemaVersion")
+    if isinstance(schema_version, bool) or not isinstance(schema_version, (int, float)) \
+            or schema_version != 1:
         fail(path, "schemaVersion must be 1")
     if not isinstance(data.get("id"), str) or not PROFILE_ID.fullmatch(data["id"]):
         fail(path, "id is invalid")
+    for field in ("description", "physicalType", "physicalName", "physicalVendor",
+                  "physicalIdentitySource", "physicalConfidence", "relationshipSource"):
+        if field in data and not isinstance(data[field], str):
+            fail(path, f"{field} must be a string")
     if data.get("physicalIdentitySource", "deterministic") not in IDENTITY_SOURCES:
         fail(path, "invalid physicalIdentitySource")
     if data.get("physicalConfidence", "none") not in CONFIDENCES:
@@ -60,6 +67,9 @@ def validate(path):
     for field in ("requireCompanionGroup", "requireContainerId", "exactCompanionFunctions"):
         if field in root and not isinstance(root[field], bool):
             fail(path, f"root.{field} must be boolean")
+    for field in ("manufacturer", "productDb", "interfaceClass"):
+        if field in root and not isinstance(root[field], str):
+            fail(path, f"root.{field} must be a string")
     for field in ("companionFunctions", "parentFunctions"):
         if field in root:
             if not isinstance(root[field], list):
@@ -72,6 +82,8 @@ def validate(path):
         fail(path, "exactCompanionFunctions requires exactly two companionFunctions")
     if len({(x["vid"], x["pid"]) for x in root["companionFunctions"]}) != len(root["companionFunctions"]):
         fail(path, "duplicate companion function")
+    if len({(x["vid"], x["pid"]) for x in root["parentFunctions"]}) != len(root["parentFunctions"]):
+        fail(path, "duplicate parent function")
     if root.get("requireCompanionGroup") is not True and not root["companionFunctions"] \
             and not root["parentFunctions"] and not root.get("requireContainerId") \
             and not any(root.get(x) for x in ("manufacturer", "productDb", "interfaceClass")):
@@ -86,14 +98,19 @@ def validate(path):
         object_only(member, {"match", "relationship", "required"}, member_path)
         if member.get("required") is not True:
             fail(member_path, "required must be true")
-        if member.get("relationship") not in RELATIONSHIPS:
+        relationship = member.get("relationship")
+        if not isinstance(relationship, str) or relationship not in RELATIONSHIPS:
             fail(member_path, "unknown relationship")
         match = member.get("match")
         object_only(match, {"vid", "pid", "logicalPort", "interfaceClass"}, member_path + ".match")
         vid_pid({"vid": match.get("vid"), "pid": match.get("pid")}, member_path + ".match")
+        for field in ("interfaceClass",):
+            if field in match and not isinstance(match[field], str):
+                fail(member_path, f"{field} must be a string")
         port = match.get("logicalPort")
-        if port is not None and (not isinstance(port, str) or not re.fullmatch(r"[1-9][0-9]*", port)):
-            fail(member_path, "logicalPort must be a positive decimal string")
+        if "logicalPort" in match and (not isinstance(port, str) or not LOGICAL_PORT.fullmatch(port)
+                                        or not 1 <= int(port) <= 255):
+            fail(member_path, "logicalPort must be a decimal string in the range 1..255")
         key = (match["vid"], match["pid"], port or "")
         if key in seen:
             fail(member_path, "duplicate member definition")

@@ -179,21 +179,99 @@ QString resolveDisplayName(const QString &product, const QString &productDb,
 
 namespace WhatCable {
 
+bool topologySiblingLess(int leftPort, bool leftKnown, int rightPort, bool rightKnown)
+{
+    if (leftKnown != rightKnown) return leftKnown;
+    if (!leftKnown) return false;
+    return leftPort < rightPort;
+}
+
+bool isTrustworthyUsbSerial(const QString &serial)
+{
+    const auto trimmed = serial.trimmed();
+    if (trimmed.isEmpty()) return false;
+    const auto lower = trimmed.toLower();
+    if (QSet<QString>{QStringLiteral("unknown"), QStringLiteral("none"), QStringLiteral("null"),
+                      QStringLiteral("n/a")}.contains(lower))
+        return false;
+
+    QString compact = lower;
+    compact.remove(QRegularExpression(QStringLiteral("[\\s:_-]")));
+    if (compact.startsWith(QStringLiteral("0x")))
+        compact.remove(0, 2);
+    if (compact.size() >= 4 && QRegularExpression(QStringLiteral("^0+$")).match(compact).hasMatch())
+        return false;
+    if (compact.size() >= 8 && QRegularExpression(QStringLiteral("^f+$")).match(compact).hasMatch())
+        return false;
+    return true;
+}
+
+QString selectCompanionSerial(const QString &usb2Serial, const QString &usb3Serial)
+{
+    const auto usb2 = usb2Serial.trimmed();
+    const auto usb3 = usb3Serial.trimmed();
+    const bool usb2Trusted = isTrustworthyUsbSerial(usb2);
+    const bool usb3Trusted = isTrustworthyUsbSerial(usb3);
+    if (usb2Trusted && usb3Trusted)
+        return usb2 == usb3 ? usb2 : QString();
+    if (usb2Trusted) return usb2;
+    if (usb3Trusted) return usb3;
+    return {};
+}
+
 DeviceModel::DeviceModel(QObject *parent)
     : QAbstractListModel(parent), m_client(this)
 {
     connect(&m_client, &UsbeehiveClient::snapshotReady, this, &DeviceModel::loadSnapshot);
+    connect(&m_client, &UsbeehiveClient::serviceAvailableChanged, this,
+            [this](bool available) {
+                if (!available) clearSnapshot(QStringLiteral("usbeehived is unavailable"), false);
+                else if (m_backendAvailable != available) {
+                    m_backendAvailable = available;
+                    emit backendAvailableChanged();
+                }
+            });
+    connect(&m_client, &UsbeehiveClient::snapshotFailed, this,
+            [this](const QString &error) { reportSnapshotError(error, true); });
 }
 
 void DeviceModel::loadSnapshot(const QString &json)
 {
-    const auto document = QJsonDocument::fromJson(json.toUtf8());
+    QJsonParseError parseError;
+    const auto document = QJsonDocument::fromJson(json.toUtf8(), &parseError);
     QJsonArray devices;
+    bool validSnapshot = document.isArray();
     if (document.isArray()) devices = document.array();
     else if (document.isObject()) {
         const auto root = document.object();
-        devices = value(root, {"devices"}).toArray();
-        if (devices.isEmpty()) devices = value(root, {"deviceSummaries", "device_summaries"}).toArray();
+        auto devicesValue = value(root, {"devices"});
+        if (!devicesValue.isArray())
+            devicesValue = value(root, {"deviceSummaries", "device_summaries"});
+        validSnapshot = devicesValue.isArray();
+        if (validSnapshot) devices = devicesValue.toArray();
+    }
+    if (validSnapshot) {
+        for (const auto &entry : devices) {
+            if (!entry.isObject() || entry.toObject().isEmpty()) {
+                validSnapshot = false;
+                break;
+            }
+        }
+    }
+    if (!validSnapshot) {
+        reportSnapshotError(parseError.error != QJsonParseError::NoError
+                                ? parseError.errorString()
+                                : QStringLiteral("SnapshotJson has an invalid device array"), true);
+        return;
+    }
+
+    if (m_snapshotError.isEmpty() == false) {
+        m_snapshotError.clear();
+        emit snapshotErrorChanged();
+    }
+    if (!m_backendAvailable) {
+        m_backendAvailable = true;
+        emit backendAvailableChanged();
     }
 
     m_devices.clear();
@@ -216,6 +294,16 @@ void DeviceModel::loadSnapshot(const QString &json)
         device.busPort = stringValue(object, {"busPort", "bus_port"});
         const auto usb = value(object, {"usb", "usb_device"}).toObject();
         device.manufacturer = stringValue(usb, {"manufacturer"});
+        if (device.manufacturer.isEmpty())
+            device.manufacturer = stringValue(object, {"manufacturer"});
+        auto interfaces = value(usb, {"interfaces"}).toArray();
+        if (interfaces.isEmpty()) interfaces = value(object, {"interfaces"}).toArray();
+        for (const auto &interfaceValue : interfaces) {
+            const auto interfaceObject = interfaceValue.toObject();
+            const auto interfaceClass = interfaceObject.value(QStringLiteral("class"));
+            if (interfaceClass.isString()) device.interfaceClasses.append(interfaceClass.toString());
+            else if (interfaceClass.isDouble()) device.interfaceClasses.append(QString::number(interfaceClass.toInt()));
+        }
         device.speed = intValue(usb, {"speed", "linkSpeedMbps", "link_speed_mbps"});
         if (device.speed == 0)
             device.speed = intValue(object, {"linkSpeedMbps", "link_speed_mbps"});
@@ -371,10 +459,40 @@ void DeviceModel::loadSnapshot(const QString &json)
     rebuildFiltered();
 }
 
+void DeviceModel::clearSnapshot(const QString &error, bool available)
+{
+    const bool availabilityChanged = m_backendAvailable != available;
+    const bool errorChanged = m_snapshotError != error;
+    m_backendAvailable = available;
+    m_snapshotError = error;
+    const bool modelChanged = !m_devices.isEmpty() || !m_filtered.isEmpty() || !m_visible.isEmpty();
+    if (modelChanged) {
+        beginResetModel();
+        m_devices.clear();
+        m_filtered.clear();
+        m_visible.clear();
+        endResetModel();
+        emit countChanged();
+    }
+    if (availabilityChanged) emit backendAvailableChanged();
+    if (errorChanged) emit snapshotErrorChanged();
+}
+
+void DeviceModel::reportSnapshotError(const QString &error, bool available)
+{
+    const bool availabilityChanged = m_backendAvailable != available;
+    const bool errorChanged = m_snapshotError != error;
+    m_backendAvailable = available;
+    m_snapshotError = error;
+    if (availabilityChanged) emit backendAvailableChanged();
+    if (errorChanged) emit snapshotErrorChanged();
+}
+
 void DeviceModel::rebuildFiltered()
 {
     beginResetModel();
     m_filtered.clear();
+    m_visible.clear();
     QList<bool> consumed(m_devices.size(), false);
 
     auto transportFlags = [](const Device &device) {
@@ -455,7 +573,7 @@ void DeviceModel::rebuildFiltered()
             group.dataRateDetail.clear();
         }
         group.containerId = usb2.containerId;
-        if (group.serial.isEmpty()) group.serial = usb3.serial;
+        group.serial = selectCompanionSerial(usb2.serial, usb3.serial);
         group.logicalPath = usb2.logicalPath;
         group.logicalParentPath = usb2.logicalParentPath;
         group.logicalRootBus = usb2.logicalRootBus;
@@ -509,9 +627,7 @@ void DeviceModel::rebuildFiltered()
     for (int i = 0; i < m_devices.size(); ++i) {
         if (consumed.at(i)) continue;
         const auto &device = m_devices.at(i);
-        if (!m_showHubs && device.isHub) continue;
-        if (!m_showEmptyPorts && device.status == 0) continue;
-        if (m_showHubs && device.isHub) {
+        if (device.isHub) {
             int match = -1;
             int matches = 0;
             for (int j = i + 1; j < m_devices.size(); ++j) {
@@ -535,6 +651,11 @@ void DeviceModel::rebuildFiltered()
         m_filtered.append(device);
     }
     resolveTopology();
+    for (const auto &device : m_filtered) {
+        if (!m_showHubs && device.isHub) continue;
+        if (!m_showEmptyPorts && device.status == 0) continue;
+        m_visible.append(device);
+    }
     endResetModel();
     emit countChanged();
 }
@@ -771,7 +892,7 @@ void DeviceModel::resolvePresentationTree()
             bool rightOk = false;
             const int leftPort = m_filtered.at(left).topologyPort.toInt(&leftOk);
             const int rightPort = m_filtered.at(right).topologyPort.toInt(&rightOk);
-            return leftOk && rightOk && leftPort != rightPort && leftPort < rightPort;
+            return topologySiblingLess(leftPort, leftOk, rightPort, rightOk);
         });
     };
     sortSiblings(roots);
@@ -867,12 +988,13 @@ void DeviceModel::resolvePhysicalProfiles()
         observation.topologyPort = device.topologyPort;
         observation.vendorId = device.vendorId;
         observation.productId = device.productId;
+        observation.manufacturer = device.manufacturer;
         observation.vendor = device.vendor;
         observation.productDb = device.productDb;
         observation.containerId = device.containerId;
         observation.deviceClass = device.deviceClass;
         observation.deviceSubclass = device.deviceSubclass;
-        observation.interfaceClasses = {device.deviceClass, device.deviceSubclass};
+        observation.interfaceClasses = device.interfaceClasses;
         observation.isCompanionHubGroup = device.isCompanionHubGroup;
         if (device.isCompanionHubGroup) {
             observation.companionFunctions = {
@@ -954,8 +1076,8 @@ void DeviceModel::resolvePhysicalInstances()
             if (m_filtered.at(i).topologyId == device.physicalRootId) return i;
         return index;
     };
-    auto rootKey = [&useful](const Device &root, QString *source) {
-        if (useful(root.serial)) {
+    auto rootKey = [&useful](const Device &root, QString *source) -> QString {
+        if (isTrustworthyUsbSerial(root.serial)) {
             if (source) *source = QStringLiteral("serial");
             return QStringLiteral("serial:%1:%2:%3").arg(root.vendorId, root.productId, root.serial);
         }
@@ -969,15 +1091,12 @@ void DeviceModel::resolvePhysicalInstances()
             }
             return QStringLiteral("container:%1").arg(root.containerId);
         }
-        if (useful(root.physicalProfileId)) {
-            if (source) *source = QStringLiteral("hardware_signature");
-            return QStringLiteral("hardware:%1:%2:%3:%4:%5")
-                .arg(root.physicalProfileId, root.vendorId, root.productId,
-                     root.usb2VendorId + root.usb2ProductId,
-                     root.usb3VendorId + root.usb3ProductId);
+        if (!root.topologyId.isEmpty()) {
+            if (source) *source = QStringLiteral("topology_fallback");
+            return QStringLiteral("topology:%1").arg(root.topologyId);
         }
-        if (source) *source = QStringLiteral("topology_fallback");
-        return QStringLiteral("topology:%1").arg(root.topologyId);
+        if (source) *source = QStringLiteral("none");
+        return {};
     };
 
     QHash<QString, QString> keySources;
@@ -988,9 +1107,11 @@ void DeviceModel::resolvePhysicalInstances()
             continue;
         QString source;
         const auto key = rootKey(m_filtered.at(i), &source);
-        rootKeys.insert(i, key);
-        keySources.insert(key, source);
-        keyRoots[key].append(m_filtered.at(i).topologyId);
+        if (!key.isEmpty()) {
+            rootKeys.insert(i, key);
+            keySources.insert(key, source);
+            keyRoots[key].append(m_filtered.at(i).topologyId);
+        }
     }
 
     QHash<QString, bool> ambiguousKeys;
@@ -1003,7 +1124,8 @@ void DeviceModel::resolvePhysicalInstances()
         const int rootIndex = rootFor(i);
         const auto key = rootKeys.value(rootIndex);
         device.physicalInstanceKey = key;
-        device.physicalInstanceKeySource = keySources.value(key);
+        device.physicalInstanceKeySource = key.isEmpty()
+            ? QStringLiteral("none") : keySources.value(key);
         device.physicalAliasIdentityAmbiguous = ambiguousKeys.value(key, false);
         device.physicalName = device.profilePhysicalName;
         device.physicalVendor = device.profilePhysicalVendor;
@@ -1086,17 +1208,16 @@ void DeviceModel::setUserAliasesJson(const QString &value)
         }
     }
     resolvePhysicalInstances();
-    if (!m_filtered.isEmpty())
-        emit dataChanged(index(0, 0), index(m_filtered.size() - 1, 0));
+    rebuildFiltered();
     emit userAliasesChanged();
 }
 
-int DeviceModel::rowCount(const QModelIndex &parent) const { return parent.isValid() ? 0 : m_filtered.size(); }
+int DeviceModel::rowCount(const QModelIndex &parent) const { return parent.isValid() ? 0 : m_visible.size(); }
 
 QVariant DeviceModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() >= m_filtered.size()) return {};
-    const auto &device = m_filtered.at(index.row());
+    if (!index.isValid() || index.row() >= m_visible.size()) return {};
+    const auto &device = m_visible.at(index.row());
     switch (role) {
     case HeadlineRole: return device.headline; case SubtitleRole: return device.subtitle;
     case IconRole: return device.icon; case CategoryRole: return device.category;

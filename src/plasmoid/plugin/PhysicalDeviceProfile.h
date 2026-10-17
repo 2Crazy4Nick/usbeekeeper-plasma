@@ -1,10 +1,13 @@
 #pragma once
 
+#include <QByteArray>
 #include <QList>
 #include <QString>
 #include <QStringList>
 
 namespace WhatCable {
+
+bool isCanonicalLogicalPort(const QString &port);
 
 struct PhysicalVidPid {
     QString vendorId;
@@ -23,6 +26,7 @@ struct PhysicalDeviceObservation {
     QString topologyPort;
     QString vendorId;
     QString productId;
+    QString manufacturer;
     QString vendor;
     QString productDb;
     QString containerId;
@@ -74,8 +78,15 @@ struct PhysicalDeviceMatch {
 
 class PhysicalDeviceProfileMatcher {
 public:
+    static bool parseProfile(const QByteArray &data, const QString &filename,
+                             PhysicalDeviceProfile *profile);
+    static QList<PhysicalDeviceProfile> rejectDuplicateProfileIds(
+        const QList<PhysicalDeviceProfile> &profiles);
     static PhysicalDeviceMatch resolve(const PhysicalDeviceObservation &candidate,
                                        const QList<PhysicalDeviceObservation> &allDevices);
+    static PhysicalDeviceMatch resolveWithProfiles(const PhysicalDeviceObservation &candidate,
+                                                   const QList<PhysicalDeviceObservation> &allDevices,
+                                                   const QList<PhysicalDeviceProfile> &profiles);
 
 private:
     static QList<PhysicalDeviceProfile> profiles();
