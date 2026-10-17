@@ -32,7 +32,7 @@ QString UsbDevice::powerLabel() const
     if (maxPowerMA <= 0)
         return {};
     if (maxPowerMA >= 1000)
-        return QStringLiteral("%1 W").arg(maxPowerMA / 1000.0, 0, 'f', 1);
+        return QStringLiteral("%1 A").arg(maxPowerMA / 1000.0, 0, 'f', 1);
     return QStringLiteral("%1 mA").arg(maxPowerMA);
 }
 

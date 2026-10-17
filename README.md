@@ -6,7 +6,8 @@ USB devices, negotiated link speeds, hub topology, and selected
 physical-device relationships through the already-running `usbeehived`
 service.
 
-The codebase originated as WhatCable-Linux, a Linux port of
+The codebase originated as
+[WhatCable-Linux](https://github.com/Zetaphor/whatcable-linux), a Linux port of
 [WhatCable](https://github.com/darrylmorley/whatcable), the macOS application by
 [Darryl Morley](https://github.com/darrylmorley). The repository still contains
 that historical Linux sysfs-based core and CLI. The supported Plasma product is
