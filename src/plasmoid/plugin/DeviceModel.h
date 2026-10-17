@@ -21,6 +21,7 @@ class DeviceModel : public QAbstractListModel {
     Q_PROPERTY(bool showTopologyTree READ showTopologyTree WRITE setShowTopologyTree NOTIFY showTopologyTreeChanged)
     Q_PROPERTY(QString userAliasesJson READ userAliasesJson WRITE setUserAliasesJson NOTIFY userAliasesChanged)
     Q_PROPERTY(bool backendAvailable READ backendAvailable NOTIFY backendAvailableChanged)
+    Q_PROPERTY(bool hasSnapshot READ hasSnapshot NOTIFY hasSnapshotChanged)
     Q_PROPERTY(QString snapshotError READ snapshotError NOTIFY snapshotErrorChanged)
 
 public:
@@ -169,6 +170,7 @@ public:
     QString userAliasesJson() const { return m_userAliasesJson; }
     void setUserAliasesJson(const QString &value);
     bool backendAvailable() const { return m_backendAvailable; }
+    bool hasSnapshot() const { return m_hasSnapshot; }
     QString snapshotError() const { return m_snapshotError; }
 
     Q_INVOKABLE void refresh();
@@ -181,6 +183,7 @@ signals:
     void showTopologyTreeChanged();
     void userAliasesChanged();
     void backendAvailableChanged();
+    void hasSnapshotChanged();
     void snapshotErrorChanged();
 
 private:
@@ -256,6 +259,7 @@ private:
     QString m_userAliasesJson = QStringLiteral("{}");
     QHash<QString, QString> m_userAliases;
     bool m_backendAvailable = false;
+    bool m_hasSnapshot = false;
     QString m_snapshotError;
 };
 

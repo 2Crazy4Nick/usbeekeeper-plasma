@@ -457,13 +457,19 @@ void DeviceModel::loadSnapshot(const QString &json)
         m_devices.append(device);
     }
     rebuildFiltered();
+    if (!m_hasSnapshot) {
+        m_hasSnapshot = true;
+        emit hasSnapshotChanged();
+    }
 }
 
 void DeviceModel::clearSnapshot(const QString &error, bool available)
 {
     const bool availabilityChanged = m_backendAvailable != available;
     const bool errorChanged = m_snapshotError != error;
+    const bool hadSnapshot = m_hasSnapshot;
     m_backendAvailable = available;
+    m_hasSnapshot = false;
     m_snapshotError = error;
     const bool modelChanged = !m_devices.isEmpty() || !m_filtered.isEmpty() || !m_visible.isEmpty();
     if (modelChanged) {
@@ -475,6 +481,7 @@ void DeviceModel::clearSnapshot(const QString &error, bool available)
         emit countChanged();
     }
     if (availabilityChanged) emit backendAvailableChanged();
+    if (hadSnapshot) emit hasSnapshotChanged();
     if (errorChanged) emit snapshotErrorChanged();
 }
 

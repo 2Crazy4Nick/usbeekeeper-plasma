@@ -17,6 +17,20 @@ PlasmoidItem {
         userAliasesJson: Plasmoid.configuration.physicalAliases || "{}"
     }
 
+    readonly property string backendStatusText: {
+        if (!deviceModel.backendAvailable) {
+            return deviceModel.snapshotError.length > 0
+                ? i18n("Cannot connect to usbeehived. Make sure it is running.")
+                : i18n("Connecting to usbeehived…")
+        }
+        if (deviceModel.snapshotError.length > 0) {
+            return deviceModel.hasSnapshot && deviceModel.count > 0
+                ? i18n("Could not update USB device information. Displayed data may be out of date.")
+                : i18n("Could not load USB device information. Try refreshing.")
+        }
+        return deviceModel.hasSnapshot ? "" : i18n("Loading USB device information…")
+    }
+
     function updatePhysicalAlias(key, alias) {
         var aliases = {}
         try {
@@ -42,6 +56,7 @@ PlasmoidItem {
 
     toolTipMainText: "USBeeKeeper"
     toolTipSubText: {
+        if (root.backendStatusText.length > 0) return root.backendStatusText
         var count = deviceModel.count
         if (count === 0) return "No USB devices"
         return count + " USB device" + (count !== 1 ? "s" : "")
@@ -93,6 +108,15 @@ PlasmoidItem {
             Layout.fillWidth: true
         }
 
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            Layout.margins: Kirigami.Units.smallSpacing
+            visible: root.backendStatusText.length > 0
+            type: deviceModel.snapshotError.length > 0
+                ? Kirigami.MessageType.Error : Kirigami.MessageType.Information
+            text: root.backendStatusText
+        }
+
         // Device list
         PlasmaComponents.ScrollView {
             Layout.fillWidth: true
@@ -112,8 +136,9 @@ PlasmoidItem {
 
                 PlasmaComponents.Label {
                     anchors.centerIn: parent
-                    visible: deviceModel.count === 0
-                    text: "No USB devices found"
+                    visible: deviceModel.backendAvailable && deviceModel.hasSnapshot
+                             && deviceModel.snapshotError.length === 0 && deviceModel.count === 0
+                    text: i18n("No USB devices found")
                     opacity: 0.5
                 }
             }

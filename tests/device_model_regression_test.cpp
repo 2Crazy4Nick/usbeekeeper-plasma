@@ -90,6 +90,10 @@ int main(int argc, char **argv)
     DeviceModel model;
     auto *client = model.findChild<UsbeehiveClient *>();
     if (!client) return 1;
+    if (model.hasSnapshot()) return 34;
+    model.setShowHubs(true);
+    model.setShowHubs(false);
+    if (model.hasSnapshot()) return 35;
 
     RequestSequencer requests;
     const auto refresh = requests.nextRefresh();
@@ -197,9 +201,10 @@ int main(int argc, char **argv)
         QStringLiteral("SERIAL-42"), QString(), QStringLiteral("usb1-port3"))})
                                .toJson(QJsonDocument::Compact);
     emit client->snapshotReady(knownGood);
-    if (model.rowCount() != 1) return 19;
+    if (model.rowCount() != 1 || !model.hasSnapshot()) return 19;
     emit client->snapshotReady(QByteArrayLiteral("not json"));
-    if (model.rowCount() != 1 || !model.backendAvailable() || model.snapshotError().isEmpty()) return 20;
+    if (model.rowCount() != 1 || !model.backendAvailable() || !model.hasSnapshot()
+        || model.snapshotError().isEmpty()) return 20;
     for (const auto &bad : {QByteArrayLiteral("{}"), QByteArrayLiteral("[1]"),
                             QByteArrayLiteral("[null]"), QByteArrayLiteral("{\"devices\":[null]}"),
                             QByteArrayLiteral("[{\"headline\":\"valid\"},1]")}) {
@@ -207,7 +212,11 @@ int main(int argc, char **argv)
         if (model.rowCount() != 1 || model.snapshotError().isEmpty()) return 21;
     }
     emit client->snapshotReady(QByteArrayLiteral("[]"));
-    if (model.rowCount() != 0 || !model.backendAvailable() || !model.snapshotError().isEmpty()) return 22;
+    if (model.rowCount() != 0 || !model.backendAvailable() || !model.hasSnapshot()
+        || !model.snapshotError().isEmpty()) return 22;
+
+    emit client->snapshotFailed(QStringLiteral("Snapshot failed with no devices"));
+    if (model.rowCount() != 0 || !model.hasSnapshot() || model.snapshotError().isEmpty()) return 36;
 
     emit client->snapshotReady(knownGood);
     emit client->snapshotFailed(QStringLiteral("Refresh failed"));
@@ -219,7 +228,12 @@ int main(int argc, char **argv)
     countChanges = 0;
     emit client->serviceAvailableChanged(false);
     emit client->serviceAvailableChanged(false);
-    if (model.rowCount() != 0 || model.backendAvailable() || countChanges != 1) return 24;
+    if (model.rowCount() != 0 || model.backendAvailable() || model.hasSnapshot()
+        || countChanges != 1) return 24;
+    emit client->serviceAvailableChanged(true);
+    if (!model.backendAvailable() || model.hasSnapshot()) return 37;
+    emit client->snapshotReady(QByteArrayLiteral("[null]"));
+    if (model.hasSnapshot() || model.snapshotError().isEmpty()) return 38;
 
     emit client->snapshotReady(knownGood);
     if (!QMetaObject::invokeMethod(client, "onServiceOwnerChanged", Qt::DirectConnection,
