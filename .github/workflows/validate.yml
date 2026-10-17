@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          dnf install -y gcc-c++ cmake extra-cmake-modules \
+          dnf install -y git gcc-c++ cmake extra-cmake-modules \
             qt6-qtbase-devel qt6-qtdeclarative-devel \
             kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel \
             kf6-kpackage-devel libplasma-devel plasma-workspace-devel \
