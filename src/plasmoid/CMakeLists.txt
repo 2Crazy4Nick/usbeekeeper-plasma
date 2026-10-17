@@ -25,8 +25,6 @@ set(QML_INSTALL_DIR "${KDE_INSTALL_QMLDIR}/org/kde/whatcable")
 install(TARGETS whatcable-plasmoid-plugin DESTINATION ${QML_INSTALL_DIR})
 install(FILES plugin/qmldir DESTINATION ${QML_INSTALL_DIR})
 
-plasma_install_package(. org.kde.whatcable)
-
 # Build a kpackagetool6-installable package directory under build/. This is a
 # separate target so QML/configuration edits refresh the local package even
 # when the C++ plugin itself does not relink.
@@ -70,6 +68,11 @@ add_custom_target(whatcable-plasmoid-package ALL
         "${CMAKE_BINARY_DIR}/qml/org/kde/whatcable/"
     COMMENT "Assembling plasmoid package and QML plugin"
 )
+
+# Install the same clean package assembled for kpackagetool6 and release
+# archives.  Installing the source directory itself would also copy the C++
+# plugin sources and bundled profile definitions into the Plasma package.
+plasma_install_package("${PKG_DIR}" org.kde.whatcable)
 
 if(BUILD_TESTING)
     add_executable(physical_profile_match_tests

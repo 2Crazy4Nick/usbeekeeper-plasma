@@ -1,0 +1,45 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:43
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          dnf install -y gcc-c++ cmake extra-cmake-modules \
+            qt6-qtbase-devel qt6-qtdeclarative-devel \
+            kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel \
+            kf6-kpackage-devel libplasma-devel plasma-workspace-devel \
+            systemd-devel python3
+
+      - name: Validate physical profiles
+        run: PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check generated diff
+        run: git diff --check

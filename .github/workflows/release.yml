@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,13 +26,22 @@ jobs:
             qt6-qtbase-devel qt6-qtdeclarative-devel \
             kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel \
             kf6-kpackage-devel libplasma-devel plasma-workspace-devel \
-            systemd-devel tar gzip
+            systemd-devel python3 tar gzip
+
+      - name: Validate physical profiles
+        run: PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
 
       - name: Configure
         run: cmake -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check generated diff
+        run: git diff --check
 
       - name: Package CLI binary
         run: |
@@ -45,10 +57,10 @@ jobs:
 
       - name: Package QML plugin (required for Plasmoid runtime)
         run: |
-          cd build
-          tar czf whatcable-linux-qml-plugin-${GITHUB_REF_NAME}-x86_64.tar.gz \
-            qml/org/kde/whatcable/libwhatcable-plasmoid-plugin.so \
-            qml/org/kde/whatcable/qmldir
+          cd build/qml
+          tar czf ../whatcable-linux-qml-plugin-${GITHUB_REF_NAME}-x86_64.tar.gz \
+            org/kde/whatcable/libwhatcable-plasmoid-plugin.so \
+            org/kde/whatcable/qmldir
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -82,13 +94,14 @@ jobs:
             |------|-------------|
             | `whatcable-linux-cli-${{ github.ref_name }}-x86_64.tar.gz` | Standalone CLI binary. Extract and run `./whatcable-linux`. |
             | `whatcable-linux-plasmoid-${{ github.ref_name }}.tar.gz` | KDE Plasma 6 widget package. Install with `kpackagetool6 -t Plasma/Applet -i org.kde.whatcable`. |
-            | `whatcable-linux-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz` | QML plugin required by the Plasmoid. Extract to `/usr/lib64/qt6/qml/` (or your distro's Qt QML path). |
+            | `whatcable-linux-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz` | QML plugin required by the Plasmoid. Extract into the Qt 6 QML import root reported by `qtpaths6`. |
 
             ### Quick install (Plasmoid)
 
             ```bash
             # Install the QML plugin (required once)
-            sudo tar xzf whatcable-linux-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz -C /usr/lib64/qt6/qml/
+            qt_qml_dir="$(qtpaths6 --query QT_INSTALL_QML)"
+            sudo tar xzf whatcable-linux-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz -C "$qt_qml_dir"
 
             # Install the Plasmoid
             tar xzf whatcable-linux-plasmoid-${{ github.ref_name }}.tar.gz
