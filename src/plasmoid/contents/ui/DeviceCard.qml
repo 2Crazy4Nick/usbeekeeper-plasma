@@ -37,16 +37,23 @@ ColumnLayout {
                     ? (model.presentationTreeDepth || 0) : (model.topologyDepth || 0)
 
                 Repeater {
-                    model: card.topologyTreeActive ? topologyGuides.depth : 0
+                    // The final column belongs to this node's elbow.  The
+                    // preceding columns only continue ancestors that still
+                    // have later siblings.
+                    model: card.topologyTreeActive ? Math.max(0, topologyGuides.depth - 1) : 0
 
                     delegate: Item {
+                        x: index * card.treeIndentStep
                         width: card.treeIndentStep
                         height: topologyGuides.height
 
                         Rectangle {
+                            // ancestorLastFlags also contains the root.  A
+                            // guide column represents the next ancestor down
+                            // the chain, hence the offset by one here.
+                            visible: !(topologyGuides.ancestorLastFlags[index + 1] || false)
                             width: 1
-                            height: (topologyGuides.ancestorLastFlags[index] || false)
-                                ? parent.height / 2 : parent.height
+                            height: parent.height
                             x: (parent.width - width) / 2
                             color: Kirigami.Theme.textColor
                             opacity: 0.22
@@ -56,7 +63,18 @@ ColumnLayout {
 
                 Rectangle {
                     visible: card.topologyTreeActive && topologyGuides.depth > 0
-                    width: card.treeIndentStep
+                    width: 1
+                    height: (model.presentationTreeIsLastChild || false)
+                        ? topologyGuides.height / 2 : topologyGuides.height
+                    x: (topologyGuides.depth - 1) * card.treeIndentStep
+                        + (card.treeIndentStep - width) / 2
+                    color: Kirigami.Theme.textColor
+                    opacity: 0.22
+                }
+
+                Rectangle {
+                    visible: card.topologyTreeActive && topologyGuides.depth > 0
+                    width: card.treeIndentStep / 2
                     height: 1
                     x: (topologyGuides.depth - 1) * card.treeIndentStep + card.treeIndentStep / 2
                     y: topologyGuides.height / 2
@@ -116,9 +134,13 @@ ColumnLayout {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
 
+                        HoverHandler {
+                            id: titleHoverHandler
+                        }
+
                         PlasmaComponents.ToolTip {
                             text: titleLabel.text
-                            visible: titleLabel.truncated
+                            visible: titleLabel.truncated && titleHoverHandler.hovered
                         }
                     }
 
@@ -148,9 +170,13 @@ ColumnLayout {
                         Layout.fillWidth: true
                         visible: text.length > 0
 
+                        HoverHandler {
+                            id: subtitleHoverHandler
+                        }
+
                         PlasmaComponents.ToolTip {
                             text: subtitleLabel.text
-                            visible: subtitleLabel.truncated
+                            visible: subtitleLabel.truncated && subtitleHoverHandler.hovered
                         }
                     }
 
