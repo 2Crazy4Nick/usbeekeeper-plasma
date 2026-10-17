@@ -47,8 +47,9 @@ jobs:
         run: |
           mkdir -p build/dist
           cp build/src/cli/whatcable-linux build/dist/
+          cp LICENSE build/dist/
           cd build/dist
-          tar czf ../whatcable-linux-cli-${GITHUB_REF_NAME}-x86_64.tar.gz whatcable-linux
+          tar czf ../whatcable-linux-cli-${GITHUB_REF_NAME}-x86_64.tar.gz whatcable-linux LICENSE
 
       - name: Package Plasmoid (KPackage for kpackagetool6)
         run: |
@@ -60,7 +61,8 @@ jobs:
           cd build/qml
           tar czf ../usbeekeeper-qml-plugin-${GITHUB_REF_NAME}-x86_64.tar.gz \
             io/github/_2crazy4nick/usbeekeeper/libusbeekeeper-plasmoid-plugin.so \
-            io/github/_2crazy4nick/usbeekeeper/qmldir
+            io/github/_2crazy4nick/usbeekeeper/qmldir \
+            io/github/_2crazy4nick/usbeekeeper/LICENSE
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

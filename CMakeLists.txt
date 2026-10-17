@@ -23,6 +23,9 @@ if(ECM_FOUND)
     include(KDECompilerSettings NO_POLICY_SCOPE)
 endif()
 
+include(GNUInstallDirs)
+install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_NAME}")
+
 find_package(Qt6 REQUIRED COMPONENTS Core)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)

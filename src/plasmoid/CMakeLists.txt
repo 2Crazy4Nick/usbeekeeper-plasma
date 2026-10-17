@@ -25,12 +25,14 @@ target_link_libraries(usbeekeeper-plasmoid-plugin PRIVATE
 set(QML_INSTALL_DIR "${KDE_INSTALL_QMLDIR}/io/github/_2crazy4nick/usbeekeeper")
 install(TARGETS usbeekeeper-plasmoid-plugin DESTINATION ${QML_INSTALL_DIR})
 install(FILES plugin/qmldir DESTINATION ${QML_INSTALL_DIR})
+install(FILES "${CMAKE_SOURCE_DIR}/LICENSE" DESTINATION ${QML_INSTALL_DIR})
 
 # Build a kpackagetool6-installable package directory under build/. This is a
 # separate target so QML/configuration edits refresh the local package even
 # when the C++ plugin itself does not relink.
 set(PKG_DIR "${CMAKE_BINARY_DIR}/pkg/io.github._2crazy4nick.usbeekeeper")
 set(PKG_QML_SOURCES
+    "${CMAKE_SOURCE_DIR}/LICENSE"
     "${CMAKE_CURRENT_SOURCE_DIR}/metadata.json"
     "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/main.qml"
     "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/CompactView.qml"
@@ -45,6 +47,8 @@ add_custom_target(usbeekeeper-plasmoid-package ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "${PKG_DIR}/contents/ui"
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_CURRENT_SOURCE_DIR}/metadata.json" "${PKG_DIR}/metadata.json"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_SOURCE_DIR}/LICENSE" "${PKG_DIR}/LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/main.qml"
         "${CMAKE_CURRENT_SOURCE_DIR}/contents/ui/CompactView.qml"
@@ -66,6 +70,9 @@ add_custom_target(usbeekeeper-plasmoid-package ALL
         "${CMAKE_BINARY_DIR}/qml/io/github/_2crazy4nick/usbeekeeper/"
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_CURRENT_SOURCE_DIR}/plugin/qmldir"
+        "${CMAKE_BINARY_DIR}/qml/io/github/_2crazy4nick/usbeekeeper/"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_SOURCE_DIR}/LICENSE"
         "${CMAKE_BINARY_DIR}/qml/io/github/_2crazy4nick/usbeekeeper/"
     COMMENT "Assembling plasmoid package and QML plugin"
 )
