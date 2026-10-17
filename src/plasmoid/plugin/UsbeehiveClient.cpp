@@ -81,7 +81,8 @@ void UsbeehiveClient::refresh()
                 if (!call->isError()) {
                     snapshot();
                 } else if (serviceIsRegistered()) {
-                    emit snapshotFailed(call->error().message());
+                    if (m_requests.acceptRefreshFailure(token))
+                        emit snapshotFailed(call->error().message());
                 } else {
                     m_requests.ownerChanged();
                     emit serviceAvailableChanged(false);

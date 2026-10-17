@@ -219,9 +219,37 @@ int main(int argc, char **argv)
     if (model.rowCount() != 0 || !model.hasSnapshot() || model.snapshotError().isEmpty()) return 36;
 
     emit client->snapshotReady(knownGood);
+    RequestSequencer failedRefreshRequests;
+    const auto snapshotBeforeRefresh = failedRefreshRequests.nextSnapshot();
+    const auto failedRefresh = failedRefreshRequests.nextRefresh();
+    if (!failedRefreshRequests.acceptRefreshFailure(failedRefresh)) return 39;
     emit client->snapshotFailed(QStringLiteral("Refresh failed"));
+    if (failedRefreshRequests.isCurrentSnapshot(snapshotBeforeRefresh)) {
+        emit client->snapshotReady(knownGood);
+        return 40;
+    }
     if (model.rowCount() != 1 || !model.backendAvailable()
         || model.snapshotError() != QStringLiteral("Refresh failed")) return 23;
+
+    const auto snapshotAfterFailure = failedRefreshRequests.nextSnapshot();
+    if (!failedRefreshRequests.isCurrentSnapshot(snapshotAfterFailure)
+        || !failedRefreshRequests.isCurrentRefresh(failedRefresh)) return 41;
+    emit client->snapshotReady(knownGood);
+    if (model.rowCount() != 1 || !model.snapshotError().isEmpty()) return 42;
+
+    failedRefreshRequests.nextRefresh();
+    if (failedRefreshRequests.acceptRefreshFailure(failedRefresh)
+        || !failedRefreshRequests.isCurrentSnapshot(snapshotAfterFailure)) return 43;
+    const auto signalSnapshot = failedRefreshRequests.nextSnapshot();
+    const auto refreshBeforeSignal = failedRefreshRequests.nextRefresh();
+    const auto snapshotDuringRefresh = failedRefreshRequests.nextSnapshot();
+    if (!failedRefreshRequests.acceptRefreshFailure(refreshBeforeSignal)
+        || failedRefreshRequests.isCurrentSnapshot(signalSnapshot)
+        || failedRefreshRequests.isCurrentSnapshot(snapshotDuringRefresh)) return 44;
+    failedRefreshRequests.ownerChanged();
+    const auto snapshotNewOwner = failedRefreshRequests.nextSnapshot();
+    if (failedRefreshRequests.acceptRefreshFailure(refreshBeforeSignal)
+        || !failedRefreshRequests.isCurrentSnapshot(snapshotNewOwner)) return 45;
 
     int countChanges = 0;
     QObject::connect(&model, &DeviceModel::countChanged, [&countChanges] { ++countChanges; });

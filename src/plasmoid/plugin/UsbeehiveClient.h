@@ -26,6 +26,13 @@ public:
     {
         return token.ownerEpoch == m_ownerEpoch && token.sequence == m_refreshSequence;
     }
+    bool acceptRefreshFailure(const RequestToken &token)
+    {
+        if (!isCurrentRefresh(token)) return false;
+        // Snapshots already in flight must not clear this newer failure.
+        ++m_snapshotSequence;
+        return true;
+    }
 
 private:
     quint64 m_ownerEpoch = 0;
