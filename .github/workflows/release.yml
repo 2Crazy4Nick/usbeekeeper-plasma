@@ -18,8 +18,6 @@ jobs:
       image: fedora:43
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Install dependencies
         run: |
           dnf install -y git gcc-c++ cmake extra-cmake-modules \
@@ -27,6 +25,8 @@ jobs:
             kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel \
             kf6-kpackage-devel libplasma-devel plasma-workspace-devel \
             systemd-devel python3 tar gzip
+
+      - uses: actions/checkout@v4
 
       - name: Validate physical profiles
         run: PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
