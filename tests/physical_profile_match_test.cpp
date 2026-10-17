@@ -63,5 +63,47 @@ int main(int argc, char **argv)
         return 3;
     }
 
+    PhysicalDeviceProfile parentProfile;
+    parentProfile.profileId = QStringLiteral("test.parent-functions");
+    const PhysicalVidPid primary{QStringLiteral("0x2109"), QStringLiteral("0x2813")};
+    const PhysicalVidPid secondary{QStringLiteral("0x2109"), QStringLiteral("0x0813")};
+    parentProfile.requiredParentFunctions = {primary};
+
+    PhysicalDeviceObservation parent;
+    parent.topologyId = QStringLiteral("root");
+    parent.vendorId = primary.vendorId;
+    parent.productId = primary.productId;
+    auto candidate = child(QStringLiteral("candidate"), QStringLiteral("0x1234"),
+                            QStringLiteral("0x5678"), QStringLiteral("1"));
+    auto parentMatches = [&](const QList<PhysicalDeviceObservation> &devices) {
+        return PhysicalDeviceProfileMatcher::resolveWithProfiles(candidate, devices, {parentProfile})
+            .physicalProfileId == parentProfile.profileId;
+    };
+    if (!parentMatches({parent, candidate})) return 4;
+    parentProfile.requiredParentFunctions = {secondary};
+    if (parentMatches({parent, candidate})) return 5;
+    // Companion observations must not be used for an ordinary parent.
+    parent.companionFunctions = {secondary};
+    if (parentMatches({parent, candidate})) return 6;
+
+    parent.isCompanionHubGroup = true;
+    parentProfile.requiredParentFunctions = {primary, secondary};
+    if (!parentMatches({parent, candidate})) {
+        std::fprintf(stderr, "Grouped parent must match primary and companion identities\n");
+        return 7;
+    }
+    parent.companionFunctions.clear();
+    if (parentMatches({parent, candidate})) return 8;
+
+    auto sibling = child(QStringLiteral("sibling"), secondary.vendorId, secondary.productId,
+                          QStringLiteral("2"));
+    auto descendant = sibling;
+    descendant.topologyId = QStringLiteral("descendant");
+    descendant.topologyParentId = candidate.topologyId;
+    PhysicalDeviceObservation unrelated = sibling;
+    unrelated.topologyId = QStringLiteral("unrelated");
+    unrelated.topologyParentId.clear();
+    if (parentMatches({parent, candidate, sibling, descendant, unrelated})) return 9;
+
     return 0;
 }

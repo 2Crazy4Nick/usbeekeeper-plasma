@@ -335,7 +335,9 @@ bool PhysicalDeviceProfileMatcher::matches(const PhysicalDeviceProfile &profile,
         bool parentMatched = false;
         for (const auto &parent : allDevices) {
             if (parent.topologyId == candidate.topologyParentId
-                && sameId(requiredParent, {parent.vendorId, parent.productId})) {
+                && (sameId(requiredParent, {parent.vendorId, parent.productId})
+                    || (parent.isCompanionHubGroup
+                        && hasFunction(parent.companionFunctions, requiredParent)))) {
                 parentMatched = true;
                 break;
             }
