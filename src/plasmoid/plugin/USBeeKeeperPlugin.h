@@ -2,7 +2,7 @@
 
 #include <QQmlExtensionPlugin>
 
-class WhatCablePlugin : public QQmlExtensionPlugin {
+class USBeeKeeperPlugin : public QQmlExtensionPlugin {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID QQmlExtensionInterface_iid)
 

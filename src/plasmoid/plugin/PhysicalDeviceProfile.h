@@ -5,7 +5,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace WhatCable {
+namespace USBeeKeeper {
 
 bool isCanonicalLogicalPort(const QString &port);
 
@@ -95,4 +95,4 @@ private:
                         const QList<PhysicalDeviceObservation> &allDevices);
 };
 
-} // namespace WhatCable
+} // namespace USBeeKeeper

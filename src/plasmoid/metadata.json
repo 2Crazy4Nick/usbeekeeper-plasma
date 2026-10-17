@@ -3,17 +3,21 @@
     "KPlugin": {
         "Authors": [
             {
+                "Name": "2Crazy4Nick"
+            },
+            {
                 "Name": "Zetaphor"
             }
         ],
         "Category": "System Information",
-        "Description": "Shows what each USB cable and device can do. Port of WhatCable (macOS) by Darryl Morley.",
+        "Description": "A KDE Plasma USB inspector powered by usbeehive, with link, topology, and physical-profile information.",
         "Icon": "drive-removable-media-usb",
-        "Id": "org.kde.whatcable",
+        "Id": "io.github._2crazy4nick.usbeekeeper",
         "License": "MIT",
-        "Name": "WhatCable",
+        "Name": "USBeeKeeper",
         "Version": "0.1.0",
-        "Website": "https://github.com/zetaphor/whatcable-linux"
+        "Website": "https://github.com/2Crazy4Nick/usbeekeeper-plasma",
+        "BugReportUrl": "https://github.com/2Crazy4Nick/usbeekeeper-plasma/issues"
     },
     "X-Plasma-API-Minimum-Version": "6.0"
 }

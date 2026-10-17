@@ -177,7 +177,7 @@ QString resolveDisplayName(const QString &product, const QString &productDb,
 
 }
 
-namespace WhatCable {
+namespace USBeeKeeper {
 
 bool topologySiblingLess(int leftPort, bool leftKnown, int rightPort, bool rightKnown)
 {
@@ -1349,4 +1349,4 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {PhysicalAliasIdentityAmbiguousRole,"physicalAliasIdentityAmbiguous"}};
 }
 
-} // namespace WhatCable
+} // namespace USBeeKeeper

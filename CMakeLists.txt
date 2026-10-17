@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(whatcable-linux VERSION 0.1.0 LANGUAGES CXX)
+project(usbeekeeper-plasma VERSION 0.1.0 LANGUAGES CXX)
 
 include(CTest)
 if(BUILD_TESTING)

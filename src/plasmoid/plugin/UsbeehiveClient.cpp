@@ -14,7 +14,7 @@ constexpr auto kPath = "/org/usbeehive/Devices";
 constexpr auto kInterface = "org.usbeehive.Devices5";
 }
 
-namespace WhatCable {
+namespace USBeeKeeper {
 
 UsbeehiveClient::UsbeehiveClient(QObject *parent)
     : QObject(parent)
@@ -117,4 +117,4 @@ bool UsbeehiveClient::serviceIsRegistered() const
     return reply.isValid() && reply.value();
 }
 
-} // namespace WhatCable
+} // namespace USBeeKeeper

@@ -10,7 +10,7 @@
 #include <QDebug>
 #include <algorithm>
 
-namespace WhatCable {
+namespace USBeeKeeper {
 
 namespace {
 
@@ -292,7 +292,7 @@ QList<PhysicalDeviceProfile> PhysicalDeviceProfileMatcher::profiles()
 {
     static const auto loaded = [] {
         QList<PhysicalDeviceProfile> result;
-        const QDir directory(QStringLiteral(":/org/kde/whatcable/profiles"));
+        const QDir directory(QStringLiteral(":/io/github/_2crazy4nick/usbeekeeper/profiles"));
         for (const auto &filename : directory.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
             if (filename == QStringLiteral("schema.json")) continue;
             QFile file(directory.filePath(filename));
@@ -448,4 +448,4 @@ PhysicalDeviceMatch PhysicalDeviceProfileMatcher::resolveWithProfiles(
     return result;
 }
 
-} // namespace WhatCable
+} // namespace USBeeKeeper

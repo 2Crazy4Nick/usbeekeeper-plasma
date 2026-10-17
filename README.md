@@ -1,92 +1,264 @@
-# WhatCable-Linux
+# USBeeKeeper
 
-> **What can this USB cable actually do?**
+[USBeeKeeper](https://github.com/2Crazy4Nick/usbeekeeper-plasma) is a KDE
+Plasma 6 USB inspection and topology widget powered by usbeehive. It displays
+USB devices, negotiated link speeds, hub topology, and selected
+physical-device relationships through the already-running `usbeehived`
+service.
 
-A KDE Plasma 6 system tray widget and CLI tool that tells you, in plain English, what each USB device plugged into your Linux machine can actually do.
+The codebase originated as WhatCable-Linux, a Linux port of
+[WhatCable](https://github.com/darrylmorley/whatcable), the macOS application by
+[Darryl Morley](https://github.com/darrylmorley). The repository still contains
+that historical Linux sysfs-based core and CLI. The supported Plasma product is
+now USBeeKeeper and no longer uses that backend.
 
-**WhatCable-Linux is a Linux port of [WhatCable](https://github.com/darrylmorley/whatcable), a macOS menu bar app by [Darryl Morley](https://github.com/darrylmorley).** This port expands the original USB-C focus to cover all USB devices, while preserving the rich USB-C Power Delivery diagnostics from the original.
+## Status
 
-![WhatCable-Linux Plasmoid](screenshot.png)
+This is an active development project and an initial public development
+baseline, not a stable release. The usbeehive-backed plasmoid has been tested
+with live USB devices and hotplug events, but interfaces, profiles, and UI
+details may still change.
 
-## What it shows
+## Architecture
 
-### All USB devices
-- **Device identity**: vendor, product name, serial number
-- **Speed**: negotiated link speed (1.5 Mbps to 20 Gbps)
-- **USB version**: 1.1, 2.0, 3.0, 3.1, 3.2
-- **Power draw**: how much power the device is consuming
-- **Device type**: HID, Audio, Mass Storage, Hub, etc.
-- **Driver**: which kernel driver is handling the device
-- **Topology**: hub hierarchy showing what's plugged into what
+```text
+QML
+  -> DeviceModel (QAbstractListModel)
+  -> Qt 6 D-Bus client
+  -> org.usbeehive.Devices5
+  -> usbeehived
+```
 
-### USB-C ports (additional detail)
-- **Port roles**: data role (host/device), power role (source/sink)
-- **Cable e-marker info**: cable speed capability, current rating (3A/5A), active vs passive, cable vendor
-- **Charger PDO list**: every voltage/current profile the charger advertises, with the active profile highlighted
-- **Charging diagnostics**: identifies bottlenecks — cable limiting speed, charger undersized, etc.
-- **Partner identity**: decoded from PD Discover Identity VDOs
+The plasmoid calls `SnapshotJson()` for complete snapshots and listens for the
+daemon's device-change signals. It does not poll and does not access sysfs or
+libudev directly. `usbeehived` must be running on the session bus as
+`org.usbeehive.Devices`.
 
-## Install
+The model deliberately keeps three concepts separate:
 
-### Build from source
+1. Raw USB identity and logical topology from usbeehive.
+2. Presentation identity, companion-hub grouping, and tree metadata.
+3. Optional physical-device profiles, relationships, and user aliases.
+
+Physical metadata augments the logical USB topology; it does not replace it.
+An integrated USB function remains visible as a real enumerated USB device with
+its own identity and diagnostics. A device with no classified physical
+relationship is unclassified—it is not automatically considered external.
+
+## Features
+
+- USB identity, descriptor, driver, power, and negotiated link information.
+- Data-rate capability summaries and warnings supplied by usbeehive.
+- Verified USB 2/USB 3 companion-hub grouping.
+- Optional depth-first USB topology tree with logical port annotations.
+- Declarative physical-device profiles for evidence-based compositions.
+- Integrated-function annotations without hiding enumerated USB devices.
+- Persistent user-defined names for physical devices when a usable instance
+  identity is available.
+- Manual refresh and automatic refresh through D-Bus change signals; no
+  periodic polling.
+
+## Requirements
+
+Runtime requirements for the plasmoid are:
+
+- KDE Plasma 6
+- Qt 6 Core, DBus, Quick, and QML
+- KDE Frameworks 6 and Kirigami
+- A running `usbeehived` exposing `org.usbeehive.Devices5`
+- The USBeeKeeper C++ QML module as well as the Plasma applet package
+
+Building the complete repository additionally requires a C++20 compiler,
+CMake, Extra CMake Modules, Plasma/KPackage development files, Python 3 for
+validation, and libudev development files for the legacy core/CLI.
+
+Example Fedora development dependencies:
 
 ```bash
-# Install dependencies (Fedora)
-sudo dnf install cmake extra-cmake-modules qt6-qtbase-devel qt6-qtdeclarative-devel \
-    kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel kf6-kpackage-devel \
-    libplasma-devel plasma-workspace-devel systemd-devel
+sudo dnf install gcc-c++ cmake extra-cmake-modules \
+    qt6-qtbase-devel qt6-qtdeclarative-devel \
+    kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel \
+    kf6-kpackage-devel libplasma-devel plasma-workspace-devel \
+    systemd-devel python3
+```
 
-# Install dependencies (Arch/Manjaro)
-sudo pacman -S cmake extra-cmake-modules qt6-base qt6-declarative \
-    kirigami ki18n plasma-workspace systemd-libs kpackage
+Package names differ between distributions.
 
-# Build
-cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
+## Build and test
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
+env CCACHE_DISABLE=1 cmake -B build
+env CCACHE_DISABLE=1 cmake --build build -j2
+ctest --test-dir build --output-on-failure
+git diff --check
+```
+
+The build creates:
+
+- `build/pkg/io.github._2crazy4nick.usbeekeeper/` — a
+  `kpackagetool6`-installable applet.
+- `build/qml/io/github/_2crazy4nick/usbeekeeper/` — the required C++ QML
+  module.
+- `build/src/cli/whatcable-linux` — the separate legacy CLI.
+
+With `usbeehived` running, launch the development package with:
+
+```bash
+QML_IMPORT_PATH="$PWD/build/qml${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+plasmoidviewer -a "$PWD/build/pkg/io.github._2crazy4nick.usbeekeeper"
+```
+
+`plasmoidviewer` creates a transient applet instance. Its configuration is not
+a valid test of persistence across host restarts; alias persistence must also
+be tested with an installed Plasma applet instance.
+
+## Installation
+
+Both runtime pieces are required:
+
+1. The Plasma applet package.
+2. The `io.github._2crazy4nick.usbeekeeper` C++ QML module.
+
+Installing only the applet produces a widget that cannot import `DeviceModel`.
+
+### CMake system installation
+
+```bash
+cmake -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 sudo cmake --install build
-
-# Or install just the plasmoid for your user
-kpackagetool6 -t Plasma/Applet -i build/pkg/org.kde.whatcable
 ```
 
-### CLI only
+On the Fedora build environment used by this project, that prefix produces:
 
-After building, the `whatcable-linux` binary is in `build/src/cli/`:
+```text
+/usr/share/plasma/plasmoids/io.github._2crazy4nick.usbeekeeper
+/usr/lib64/qt6/qml/io/github/_2crazy4nick/usbeekeeper
+```
+
+`/usr/lib64/qt6/qml` is not portable across distributions. Query the active
+Qt installation instead:
 
 ```bash
-whatcable-linux              # human-readable summary of every USB device
-whatcable-linux --json       # structured JSON output
-whatcable-linux --watch      # stream updates as devices come and go
-whatcable-linux --raw        # include raw sysfs attributes
-whatcable-linux --version
-whatcable-linux --help
+qtpaths6 --query QT_INSTALL_QML
 ```
 
-## How it works
+CMake uses KDE/Qt install variables and may select a different QML module root
+on another distribution or with another prefix.
 
-WhatCable-Linux reads three areas of the Linux sysfs virtual filesystem. No root access required for basic info:
+### Release archives
 
-| sysfs path | What it gives us |
-|---|---|
-| `/sys/bus/usb/devices/` | All USB devices: vendor, product, speed, power, class, interfaces, topology |
-| `/sys/class/typec/` | USB-C port state: connection, roles, cable e-marker, partner identity |
-| `/sys/class/usb_power_delivery/` | PD negotiation: PDO list from charger, active profile, PPS ranges |
+The plasmoid archive contains `io.github._2crazy4nick.usbeekeeper/`. The plugin
+archive contains `io/github/_2crazy4nick/usbeekeeper/` relative to the Qt QML
+import root.
 
-Hotplug monitoring uses `libudev` to detect connect/disconnect events in real time.
+```bash
+qt_qml_dir="$(qtpaths6 --query QT_INSTALL_QML)"
+sudo tar xzf usbeekeeper-qml-plugin-*-x86_64.tar.gz -C "$qt_qml_dir"
 
-Cable speed and power decoding follow the USB Power Delivery 3.x spec, ported from the original WhatCable's Swift implementation.
+tar xzf usbeekeeper-plasmoid-*.tar.gz
+kpackagetool6 -t Plasma/Applet -i io.github._2crazy4nick.usbeekeeper
+```
 
-## Caveats
+Use `kpackagetool6 -t Plasma/Applet -u io.github._2crazy4nick.usbeekeeper` when
+upgrading an already installed applet package.
 
-- **USB-C/PD data availability varies by hardware.** The Type-C connector class and USB PD sysfs interfaces depend on the kernel driver (UCSI, TCPM, platform-specific). Some systems expose full PD negotiation data; others expose only basic port info or nothing at all.
-- **Cable e-marker info only appears for cables that carry one.** Same as the original — most USB-C cables under 60W are unmarked.
-- **WhatCable trusts the e-marker.** Counterfeit or mis-flashed cables can lie about their capabilities.
-- **Vendor name lookup is not exhaustive.** Common vendors are recognized; others show the hex VID.
+### User-local development installation
 
-## Credits
+`kpackagetool6` installs an applet for the current user unless `--global` is
+specified:
 
-WhatCable-Linux is a port of [WhatCable](https://github.com/darrylmorley/whatcable) by [Darryl Morley](https://github.com/darrylmorley). The USB Power Delivery decoding logic, charging diagnostics, vendor database, and plain-English summary approach are derived from the original macOS app.
+```bash
+kpackagetool6 -t Plasma/Applet -i io.github._2crazy4nick.usbeekeeper
+```
 
-## License
+The QML module may be extracted beneath a user-controlled import root, for
+example `~/.local/lib64/qml/io/github/_2crazy4nick/usbeekeeper`, but Qt does
+not automatically discover that directory. `QML_IMPORT_PATH` must be present
+in the environment of the process loading the applet:
 
-[MIT](LICENSE)
+```bash
+user_qml_root="$HOME/.local/lib64/qml"
+mkdir -p "$user_qml_root"
+tar xzf usbeekeeper-qml-plugin-*-x86_64.tar.gz -C "$user_qml_root"
+
+QML_IMPORT_PATH="$user_qml_root${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+plasmoidviewer -a io.github._2crazy4nick.usbeekeeper
+```
+
+For a persistent desktop installation, the same import path must be exported
+to the Plasma session before `plasmashell` starts. Exporting it only in a later
+terminal does not affect the running shell.
+
+## Physical-device profiles
+
+Profiles are strict, versioned JSON files in `src/plasmoid/profiles/`, with one
+physical layout per file. Adding supported hardware should normally require
+only one new JSON file—no C++ or per-profile CMake edit.
+
+`schema.json` documents the format and is bundled as a resource, but it is not
+a hardware profile. Profiles may classify a relationship only when explicit
+hardware or structural evidence supports it. Not matching a profile does not
+mean a child is external.
+
+To contribute a profile:
+
+1. Copy a similar hardware profile and assign a unique ID.
+2. Describe the root and only relationships supported by evidence.
+3. Run `python3 tools/validate_profiles.py`.
+4. Configure and build the repository.
+5. Run `ctest --test-dir build --output-on-failure`.
+6. Submit the new JSON file in a pull request.
+
+See [CONTRIBUTING_PROFILES.md](CONTRIBUTING_PROFILES.md) for the format and
+contribution rules. Manual user relationship overrides do not exist yet.
+
+## Known limitations
+
+- Hardware without profile or direct hardware evidence remains relationship-
+  unclassified. Unclassified does not mean external.
+- Physical alias portability depends on the stable instance identity exposed
+  by the device. Serial and container identities can survive relocation;
+  topology fallback aliases are tied to an attachment location and are
+  explicitly nonportable.
+- Alias persistence has been exercised in development, but persistence across
+  restarts still needs verification in a real installed Plasma session;
+  `plasmoidviewer` configuration is transient.
+- Tests cover model and request-sequencing behavior, but there is no complete
+  fake D-Bus service integration harness for daemon owner transitions.
+- Physical profiles describe known structures conservatively and do not imply
+  a retail product identity unless the available evidence supports one.
+- The legacy CLI and Type-C/sysfs implementation are separate from the
+  usbeehive plasmoid and are not presented as fully validated current
+  functionality.
+
+## Legacy CLI
+
+`whatcable-linux` is still built from `src/core/` and `src/cli/`. It reads
+Linux sysfs directly and uses libudev for hotplug monitoring. This code path is
+independent of the plasmoid's usbeehive backend and currently remains primarily
+as legacy functionality.
+
+```bash
+./build/src/cli/whatcable-linux --help
+```
+
+## Roadmap
+
+- Manual local Integrated relationship overrides with an Automatic fallback.
+- More evidence-based community hardware profiles.
+- Further UI and diagnostic improvements.
+- Broader installed-session and D-Bus lifecycle integration testing.
+
+## License and attribution
+
+USBeeKeeper is licensed under the [MIT License](LICENSE).
+
+USBeeKeeper retains the original project's attribution. This codebase is
+derived from
+[WhatCable](https://github.com/darrylmorley/whatcable) by
+[Darryl Morley](https://github.com/darrylmorley). Source files ported from the
+original Swift implementation retain attribution headers, and the original
+project's approach to USB Power Delivery decoding and plain-language
+diagnostics remains credited under the MIT license.

@@ -1,76 +1,159 @@
-# WhatCable-Linux — Agent Guidelines
+# USBeeKeeper — Agent Guidelines
 
-## Project Overview
+## Project overview
 
-WhatCable-Linux is a Linux port of [WhatCable](https://github.com/darrylmorley/whatcable) (macOS) by Darryl Morley. It is a KDE Plasma 6 Plasmoid + CLI tool that shows USB device and USB-C cable information by reading Linux sysfs.
+USBeeKeeper is a KDE Plasma 6 plasmoid backed by `usbeehived`. The repository
+also contains the separate legacy WhatCable-Linux sysfs-based CLI. It is
+derived from
+[WhatCable](https://github.com/darrylmorley/whatcable) by Darryl Morley.
 
-## Architecture
+Do not assume the plasmoid and CLI share a hardware backend. The current
+plasmoid must use usbeehive exclusively.
 
-Three components share a single core library:
+## Current architecture
 
-- **`src/core/`** — `libwhatcablecore`, a static C++ library. Reads sysfs, decodes USB PD data, and produces human-readable summaries. No Qt GUI dependencies — only Qt6::Core.
-- **`src/cli/`** — `whatcable-linux` CLI binary. Uses the core library. Supports `--json`, `--watch`, `--raw`.
-- **`src/plasmoid/`** — KDE Plasma 6 widget. A C++ QML plugin (`DeviceModel`) wraps the core library's `DeviceManager` as a `QAbstractListModel`. QML files in `contents/ui/` provide the UI.
+### Plasma widget
 
-## Key Data Flow
-
-```
-/sys/bus/usb/devices/         → UsbDevice.cpp
-/sys/class/typec/             → TypeCPort.cpp
-/sys/class/usb_power_delivery/ → PowerDelivery.cpp
-                                    ↓
-                              DeviceManager.cpp  ← UDevMonitor.cpp (hotplug)
-                                    ↓
-                              DeviceSummary.cpp (plain-English output)
-                                    ↓
-                        CLI (main.cpp)  |  Plasmoid (DeviceModel → QML)
+```text
+QML
+  -> DeviceModel (QAbstractListModel)
+  -> UsbeehiveClient (Qt 6 D-Bus)
+  -> org.usbeehive.Devices5
+  -> usbeehived
 ```
 
-## Code Conventions
+- `src/plasmoid/plugin/UsbeehiveClient.*` watches the session-bus owner,
+  requests `SnapshotJson()`, calls `Refresh()`, and reacts to device signals.
+- `src/plasmoid/plugin/DeviceModel.*` parses snapshots, preserves raw USB
+  identity, groups verified companion hubs, resolves logical topology, applies
+  physical profiles/aliases, and exposes presentation roles to QML.
+- `src/plasmoid/plugin/PhysicalDeviceProfile.*` loads and matches declarative
+  profiles from `src/plasmoid/profiles/`.
+- `src/plasmoid/contents/ui/` contains the Plasma UI.
 
-- C++20, Qt 6 style. Use `QStringLiteral()` for string literals.
-- All core classes are in the `WhatCable` namespace.
-- sysfs reads go through `SysfsReader` — never read `/sys/` directly with raw file I/O.
-- Source files derived from the original Swift code must keep the attribution header: `// Derived from WhatCable by Darryl Morley (https://github.com/darrylmorley/whatcable)`
-- Handle missing sysfs paths gracefully — return empty/nullopt, never crash. Many systems lack `/sys/class/typec/` or `/sys/class/usb_power_delivery/`.
+The plasmoid does not read sysfs, use libudev, or poll. Do not reintroduce a
+direct hardware backend into it. `usbeehived` is required at runtime.
 
-## Build
+### Legacy core and CLI
+
+- `src/core/` is the original Linux Qt Core library. It reads sysfs, decodes
+  USB Power Delivery data, and uses libudev for hotplug monitoring.
+- `src/cli/` builds `whatcable-linux` on that legacy core.
+
+The legacy code remains buildable but is independent of the plasmoid and is
+not the primary validated path. Changes to it should not be inferred from
+plasmoid work.
+
+## Model principles
+
+Keep these layers distinct:
+
+1. Raw USB identity and logical paths from the daemon snapshot.
+2. Presentation identity, companion grouping, filtering, and topology order.
+3. Optional physical profiles, relationships, instance keys, and user aliases.
+
+Physical metadata augments topology; it must not overwrite raw identity or
+hide real enumerated USB devices. `integrated_function` is evidence-based.
+Absence of an Integrated match never means External.
+
+Companion hubs may be grouped only by the existing verified criteria. Do not
+infer physical products from display names, VID/PID alone, list order, or a
+child's mere presence beneath a hub.
+
+## Code conventions
+
+- C++20 and Qt 6 style; use `QStringLiteral()` for C++ string literals.
+- Preserve the attribution header on source derived from the original Swift
+  project:
+  `// Derived from WhatCable by Darryl Morley (https://github.com/darrylmorley/whatcable)`
+- Missing daemon fields and optional JSON values must fail safely.
+- D-Bus failures and malformed snapshots must not be interpreted as a valid
+  empty device list.
+- Do not add polling; use daemon owner/device signals.
+- Keep user aliases separate from logical display identity and use only
+  conservative instance keys.
+- Preserve unrelated user changes in a dirty worktree.
+
+For legacy core changes only, sysfs access goes through `SysfsReader`; never
+read `/sys/` with ad hoc file I/O.
+
+## Physical profiles
+
+Profiles live in `src/plasmoid/profiles/`, one profile per JSON file.
+`schema.json` is documentation/schema data, not a hardware profile.
+
+Adding supported hardware should normally require only a JSON file. Do not add
+profile IDs, VID/PIDs, or profile-specific branches to C++. A profile may mark
+a relationship Integrated only when its complete required signature matches.
+
+Validate profiles with:
 
 ```bash
-cmake -B build
-cmake --build build
+PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
 ```
 
-The plasmoid is only built when KDE Frameworks 6 dev packages are installed. Without them, the core library and CLI still build fine.
+See `CONTRIBUTING_PROFILES.md` for contributor rules.
 
-## Testing
+## Build and test
 
-- Run the CLI: `./build/src/cli/whatcable-linux`
-- JSON output: `./build/src/cli/whatcable-linux --json`
-- Watch mode: `./build/src/cli/whatcable-linux --watch`
-- Plasmoid testing: `plasmoidviewer -a build/src/plasmoid` (requires plasma-sdk)
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
+env CCACHE_DISABLE=1 cmake -B build
+env CCACHE_DISABLE=1 cmake --build build -j2
+ctest --test-dir build --output-on-failure
+git diff --check
+```
 
-## Key Files to Know
+The plasmoid is built only when its Qt 6, KDE Frameworks 6, and Plasma
+development dependencies are available. The complete repository also requires
+libudev for the legacy core/CLI.
+
+Development output:
+
+- `build/pkg/io.github._2crazy4nick.usbeekeeper/` — applet package.
+- `build/qml/io/github/_2crazy4nick/usbeekeeper/` — required QML plugin/module.
+
+With `usbeehived` running:
+
+```bash
+QML_IMPORT_PATH="$PWD/build/qml${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+plasmoidviewer -a "$PWD/build/pkg/io.github._2crazy4nick.usbeekeeper"
+```
+
+Do not use plasmoidviewer restart behavior to judge configuration persistence;
+its applet instance is transient.
+
+## Installation and packaging
+
+The applet package and C++ QML module are both required. CMake installs through
+KDE/Qt install variables. Release plugin archives are rooted at
+`io/github/_2crazy4nick/usbeekeeper/` relative to the QML import root reported
+by:
+
+```bash
+qtpaths6 --query QT_INSTALL_QML
+```
+
+For user-local applet testing:
+
+```bash
+kpackagetool6 -t Plasma/Applet -i io.github._2crazy4nick.usbeekeeper
+```
+
+A user-local QML module directory is not discovered automatically; it must be
+provided to the loading Plasma process through `QML_IMPORT_PATH`.
+
+## Key files
 
 | File | Purpose |
 |---|---|
-| `src/core/UsbDevice.h/cpp` | Enumerates all USB devices from `/sys/bus/usb/devices/` |
-| `src/core/TypeCPort.h/cpp` | Reads USB-C port state from `/sys/class/typec/` |
-| `src/core/PDDecoder.h/cpp` | USB PD VDO bit-field decoding (ported from PDVDO.swift) |
-| `src/core/PowerDelivery.h/cpp` | Parses PDO lists from `/sys/class/usb_power_delivery/` |
-| `src/core/DeviceSummary.h/cpp` | Generates headlines, subtitles, bullets per device |
-| `src/core/ChargingDiagnostic.h/cpp` | Identifies USB-C charging bottlenecks |
-| `src/core/DeviceManager.h/cpp` | Aggregates all sources, correlates data, owns refresh logic |
-| `src/core/UDevMonitor.h/cpp` | libudev hotplug monitoring |
-| `src/core/VendorDB.h/cpp` | USB VID → vendor name lookup |
-| `src/core/UsbClassDB.h/cpp` | USB class code → human name |
-| `src/plasmoid/plugin/DeviceModel.h/cpp` | QAbstractListModel bridging core to QML |
-| `src/plasmoid/contents/ui/main.qml` | Plasmoid entry: compact + full representation |
-
-## Adding New Vendors
-
-Add entries to the `kVendors` map in `src/core/VendorDB.cpp`. Format: `{0xVID, QStringLiteral("Vendor Name")}`.
-
-## Adding New USB Class Codes
-
-Add cases to `UsbClassDB::className()` or `interfaceClassName()` in `src/core/UsbClassDB.cpp`.
+| `src/plasmoid/plugin/UsbeehiveClient.h/.cpp` | D-Bus lifecycle, snapshots, and refresh |
+| `src/plasmoid/plugin/DeviceModel.h/.cpp` | Snapshot parsing and QML-facing model |
+| `src/plasmoid/plugin/PhysicalDeviceProfile.h/.cpp` | Generic profile loader and matcher |
+| `src/plasmoid/profiles/` | Declarative physical profiles and schema |
+| `src/plasmoid/contents/ui/main.qml` | Plasmoid entry and configuration bindings |
+| `src/plasmoid/contents/ui/DeviceCard.qml` | Device card and topology guides |
+| `tools/validate_profiles.py` | Contributor profile validator |
+| `tests/` | Validator, matcher, and model regression tests |
+| `src/core/` | Legacy sysfs/libudev core |
+| `src/cli/` | Legacy command-line frontend |

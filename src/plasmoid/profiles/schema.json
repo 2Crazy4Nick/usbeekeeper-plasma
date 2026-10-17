@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "WhatCable physical USB profile",
+  "title": "USBeeKeeper physical USB profile",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "root", "members"],

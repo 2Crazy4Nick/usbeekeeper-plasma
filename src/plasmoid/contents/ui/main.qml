@@ -4,7 +4,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components as PlasmaComponents
-import org.kde.whatcable 1.0
+import io.github._2crazy4nick.usbeekeeper 1.0
 
 PlasmoidItem {
     id: root
@@ -40,7 +40,7 @@ PlasmoidItem {
     switchWidth: Kirigami.Units.gridUnit * 20
     switchHeight: Kirigami.Units.gridUnit * 24
 
-    toolTipMainText: "WhatCable"
+    toolTipMainText: "USBeeKeeper"
     toolTipSubText: {
         var count = deviceModel.count
         if (count === 0) return "No USB devices"
@@ -71,7 +71,7 @@ PlasmoidItem {
             }
 
             PlasmaComponents.Label {
-                text: "WhatCable"
+                text: "USBeeKeeper"
                 font.bold: true
                 Layout.fillWidth: true
             }

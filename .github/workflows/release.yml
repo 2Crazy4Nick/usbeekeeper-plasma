@@ -53,14 +53,14 @@ jobs:
       - name: Package Plasmoid (KPackage for kpackagetool6)
         run: |
           cd build/pkg
-          tar czf ../whatcable-linux-plasmoid-${GITHUB_REF_NAME}.tar.gz org.kde.whatcable/
+          tar czf ../usbeekeeper-plasmoid-${GITHUB_REF_NAME}.tar.gz io.github._2crazy4nick.usbeekeeper/
 
       - name: Package QML plugin (required for Plasmoid runtime)
         run: |
           cd build/qml
-          tar czf ../whatcable-linux-qml-plugin-${GITHUB_REF_NAME}-x86_64.tar.gz \
-            org/kde/whatcable/libwhatcable-plasmoid-plugin.so \
-            org/kde/whatcable/qmldir
+          tar czf ../usbeekeeper-qml-plugin-${GITHUB_REF_NAME}-x86_64.tar.gz \
+            io/github/_2crazy4nick/usbeekeeper/libusbeekeeper-plasmoid-plugin.so \
+            io/github/_2crazy4nick/usbeekeeper/qmldir
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -68,8 +68,8 @@ jobs:
           name: release-assets
           path: |
             build/whatcable-linux-cli-*.tar.gz
-            build/whatcable-linux-plasmoid-*.tar.gz
-            build/whatcable-linux-qml-plugin-*.tar.gz
+            build/usbeekeeper-plasmoid-*.tar.gz
+            build/usbeekeeper-qml-plugin-*.tar.gz
 
   release:
     needs: build
@@ -92,23 +92,23 @@ jobs:
 
             | File | Description |
             |------|-------------|
-            | `whatcable-linux-cli-${{ github.ref_name }}-x86_64.tar.gz` | Standalone CLI binary. Extract and run `./whatcable-linux`. |
-            | `whatcable-linux-plasmoid-${{ github.ref_name }}.tar.gz` | KDE Plasma 6 widget package. Install with `kpackagetool6 -t Plasma/Applet -i org.kde.whatcable`. |
-            | `whatcable-linux-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz` | QML plugin required by the Plasmoid. Extract into the Qt 6 QML import root reported by `qtpaths6`. |
+            | `whatcable-linux-cli-${{ github.ref_name }}-x86_64.tar.gz` | Legacy standalone sysfs/libudev CLI. Extract and run `./whatcable-linux`. |
+            | `usbeekeeper-plasmoid-${{ github.ref_name }}.tar.gz` | USBeeKeeper KDE Plasma 6 widget package. Install with `kpackagetool6 -t Plasma/Applet -i io.github._2crazy4nick.usbeekeeper`. |
+            | `usbeekeeper-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz` | QML plugin required by USBeeKeeper. Extract into the Qt 6 QML import root reported by `qtpaths6`. |
 
             ### Quick install (Plasmoid)
 
             ```bash
             # Install the QML plugin (required once)
             qt_qml_dir="$(qtpaths6 --query QT_INSTALL_QML)"
-            sudo tar xzf whatcable-linux-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz -C "$qt_qml_dir"
+            sudo tar xzf usbeekeeper-qml-plugin-${{ github.ref_name }}-x86_64.tar.gz -C "$qt_qml_dir"
 
             # Install the Plasmoid
-            tar xzf whatcable-linux-plasmoid-${{ github.ref_name }}.tar.gz
-            kpackagetool6 -t Plasma/Applet -i org.kde.whatcable
+            tar xzf usbeekeeper-plasmoid-${{ github.ref_name }}.tar.gz
+            kpackagetool6 -t Plasma/Applet -i io.github._2crazy4nick.usbeekeeper
             ```
 
-            ### Quick install (CLI only)
+            ### Quick install (legacy CLI only)
 
             ```bash
             tar xzf whatcable-linux-cli-${{ github.ref_name }}-x86_64.tar.gz

@@ -9,7 +9,7 @@
 #include <QJsonObject>
 #include <vector>
 
-using namespace WhatCable;
+using namespace USBeeKeeper;
 
 static QJsonObject usbDevice(const QString &headline, const QString &vendor,
                              const QString &product, const QString &portId,

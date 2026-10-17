@@ -6,7 +6,7 @@
 
 class QDBusPendingCallWatcher;
 
-namespace WhatCable {
+namespace USBeeKeeper {
 
 struct RequestToken {
     quint64 ownerEpoch = 0;
@@ -59,4 +59,4 @@ private:
     RequestSequencer m_requests;
 };
 
-} // namespace WhatCable
+} // namespace USBeeKeeper

@@ -1,2 +1,2 @@
-module org.kde.whatcable
-plugin whatcable-plasmoid-plugin
+module io.github._2crazy4nick.usbeekeeper
+plugin usbeekeeper-plasmoid-plugin

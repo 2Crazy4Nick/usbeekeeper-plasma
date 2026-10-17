@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate declarative WhatCable physical-device profiles."""
+"""Validate declarative USBeeKeeper physical-device profiles."""
 
 import argparse
 import json

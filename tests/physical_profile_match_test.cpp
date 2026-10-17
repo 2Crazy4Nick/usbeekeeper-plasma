@@ -2,7 +2,7 @@
 
 #include <QCoreApplication>
 
-using namespace WhatCable;
+using namespace USBeeKeeper;
 
 static PhysicalDeviceObservation child(const QString &id, const QString &vid,
                                        const QString &pid, const QString &port)

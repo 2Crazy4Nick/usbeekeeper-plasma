@@ -7,7 +7,7 @@
 #include <QVariantList>
 #include "UsbeehiveClient.h"
 
-namespace WhatCable {
+namespace USBeeKeeper {
 
 bool topologySiblingLess(int leftPort, bool leftKnown, int rightPort, bool rightKnown);
 bool isTrustworthyUsbSerial(const QString &serial);
@@ -259,4 +259,4 @@ private:
     QString m_snapshotError;
 };
 
-} // namespace WhatCable
+} // namespace USBeeKeeper
