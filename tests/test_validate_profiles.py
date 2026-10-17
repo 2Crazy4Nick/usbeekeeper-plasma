@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -84,6 +85,35 @@ class ProfileValidatorTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as temp:
                     with self.assertRaises(ValueError):
                         validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+    def test_identifier_suffixes_are_rejected(self):
+        for field in ("id", "vid", "pid", "logicalPort"):
+            for suffix in ("\n", "\r\n", " ", "\t", "!"):
+                with self.subTest(field=field, suffix=repr(suffix)):
+                    profile = self.valid()
+                    target = profile if field == "id" else profile["members"][0]["match"]
+                    target[field] += suffix
+                    with tempfile.TemporaryDirectory() as temp:
+                        with self.assertRaises(ValueError):
+                            validate_profiles.validate(self.write(Path(temp), "bad.json", profile))
+
+    def test_schema_patterns_require_complete_strings(self):
+        schema = json.loads((ROOT / "src/plasmoid/profiles/schema.json").read_text())
+        member = schema["$defs"]["member"]["properties"]["match"]["properties"]
+        ids = schema["$defs"]["vidPid"]["properties"]
+        cases = [(schema["properties"]["id"]["pattern"], "Generic.audit_2-name")]
+        cases += [(fields[field]["pattern"], "0bda")
+                  for fields in (ids, member) for field in ("vid", "pid")]
+        cases += [(member["logicalPort"]["pattern"], port) for port in ("1", "2", "255")]
+        for pattern, value in cases:
+            with self.subTest(pattern=pattern, value=value):
+                # JSON Schema patterns search for a match; do not use fullmatch
+                # here, which would hide an insufficiently strict pattern.
+                self.assertIsNotNone(re.search(pattern, value))
+                for suffix in ("\n", "\r\n", " ", "\t", "!"):
+                    self.assertIsNone(re.search(pattern, value + suffix))
+        for port in ("", "0", "01", "+1", "-1", "256"):
+            self.assertIsNone(re.search(member["logicalPort"]["pattern"], port))
 
     def test_duplicate_parent_functions_are_rejected(self):
         profile = self.valid()

@@ -16,8 +16,8 @@ namespace {
 
 bool sameId(const PhysicalVidPid &left, const PhysicalVidPid &right);
 
-const QRegularExpression kHexId(QStringLiteral("^[0-9a-f]{4}$"));
-const QRegularExpression kProfileId(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]*$"));
+const QRegularExpression kHexId(QRegularExpression::anchoredPattern(QStringLiteral("[0-9a-f]{4}")));
+const QRegularExpression kProfileId(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9][A-Za-z0-9._-]*")));
 
 bool objectKeysKnown(const QJsonObject &object, const QSet<QString> &allowed,
                      const QString &filename)
@@ -259,7 +259,7 @@ bool matchesChild(const PhysicalChildRequirement &required,
 
 bool isCanonicalLogicalPort(const QString &port)
 {
-    static const QRegularExpression decimal(QStringLiteral("^[1-9][0-9]{0,2}$"));
+    static const QRegularExpression decimal(QRegularExpression::anchoredPattern(QStringLiteral("[1-9][0-9]{0,2}")));
     if (!decimal.match(port).hasMatch()) return false;
     bool ok = false;
     const auto value = port.toUInt(&ok, 10);

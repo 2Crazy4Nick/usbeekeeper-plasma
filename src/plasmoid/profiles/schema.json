@@ -6,7 +6,7 @@
   "required": ["schemaVersion", "id", "root", "members"],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?![\\s\\S])" },
     "description": { "type": "string" },
     "physicalType": { "type": "string" },
     "physicalName": { "type": "string" },
@@ -26,8 +26,8 @@
       "additionalProperties": false,
       "required": ["vid", "pid"],
       "properties": {
-        "vid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
-        "pid": { "type": "string", "pattern": "^[0-9a-f]{4}$" }
+        "vid": { "type": "string", "pattern": "^[0-9a-f]{4}(?![\\s\\S])" },
+        "pid": { "type": "string", "pattern": "^[0-9a-f]{4}(?![\\s\\S])" }
       }
     },
     "root": {
@@ -75,9 +75,9 @@
           "additionalProperties": false,
           "required": ["vid", "pid"],
           "properties": {
-            "vid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
-            "pid": { "type": "string", "pattern": "^[0-9a-f]{4}$" },
-            "logicalPort": { "type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$" },
+            "vid": { "type": "string", "pattern": "^[0-9a-f]{4}(?![\\s\\S])" },
+            "pid": { "type": "string", "pattern": "^[0-9a-f]{4}(?![\\s\\S])" },
+            "logicalPort": { "type": "string", "pattern": "^(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(?![\\s\\S])" },
             "interfaceClass": { "type": "string" }
           }
         },

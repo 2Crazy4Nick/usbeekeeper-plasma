@@ -287,6 +287,32 @@ int main(int argc, char **argv)
         if (PhysicalDeviceProfileMatcher::parseProfile(json, QStringLiteral("test.json"), &parsed)) return 28;
     }
 
+    for (const auto &suffix : {QStringLiteral("\n"), QStringLiteral("\r\n"),
+                                QStringLiteral(" "), QStringLiteral("\t"), QStringLiteral("!")}) {
+        for (const auto &field : {QStringLiteral("id"), QStringLiteral("vid"),
+                                  QStringLiteral("pid"), QStringLiteral("logicalPort")}) {
+            auto profile = profileJson(QStringLiteral("2"));
+            if (field == QLatin1String("id")) {
+                profile[field] = profile.value(field).toString() + suffix;
+            } else {
+                auto members = profile.value(QStringLiteral("members")).toArray();
+                auto member = members.first().toObject();
+                auto match = member.value(QStringLiteral("match")).toObject();
+                match[field] = match.value(field).toString() + suffix;
+                member[QStringLiteral("match")] = match;
+                members[0] = member;
+                profile[QStringLiteral("members")] = members;
+            }
+            PhysicalDeviceProfile parsed;
+            if (PhysicalDeviceProfileMatcher::parseProfile(
+                    QJsonDocument(profile).toJson(QJsonDocument::Compact),
+                    QStringLiteral("suffix-test.json"), &parsed)) {
+                std::fprintf(stderr, "Accepted invalid suffix for %s\n", qPrintable(field));
+                return 46;
+            }
+        }
+    }
+
     auto duplicateParent = profileJson(QStringLiteral("1"));
     auto root = duplicateParent.value(QStringLiteral("root")).toObject();
     const auto function = QJsonObject{{QStringLiteral("vid"), QStringLiteral("2109")},
