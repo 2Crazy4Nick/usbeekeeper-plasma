@@ -28,6 +28,11 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Trust checkout directory
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git rev-parse --is-inside-work-tree
+
       - name: Validate physical profiles
         run: PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_profiles.py
 
