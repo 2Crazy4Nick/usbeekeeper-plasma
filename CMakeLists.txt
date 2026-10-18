@@ -27,11 +27,13 @@ include(GNUInstallDirs)
 install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_NAME}")
 
 find_package(Qt6 REQUIRED COMPONENTS Core)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(UDEV REQUIRED libudev)
-
-add_subdirectory(src/core)
-add_subdirectory(src/cli)
+option(BUILD_LEGACY_CLI "Build the separate legacy WhatCable core and CLI" ON)
+if(BUILD_LEGACY_CLI)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(UDEV REQUIRED libudev)
+    add_subdirectory(src/core)
+    add_subdirectory(src/cli)
+endif()
 
 # Plasmoid requires KDE Frameworks 6
 if(ECM_FOUND)

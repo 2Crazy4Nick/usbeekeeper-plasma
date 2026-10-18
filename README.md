@@ -116,6 +116,24 @@ be tested with an installed Plasma applet instance.
 
 ## Installation
 
+### Fedora RPM
+
+The `usbeekeeper` RPM installs both the applet and native QML plugin together:
+
+```bash
+sudo dnf install ./usbeekeeper-<version>.<architecture>.rpm
+usbeekeeper-check-installation
+```
+
+Install and run `usbeehived` separately; it must provide
+`org.usbeehive.Devices5` on the session D-Bus. Run the conflict checker without
+sudo, then add USBeeKeeper through Plasma's Add Widgets menu. Install a newer
+RPM with the same DNF command to upgrade; log out and back in to reload a
+previously loaded plugin. No COPR repository is published yet.
+
+See [Fedora installation and RPM builds](packaging/fedora/INSTALL.md) for local
+copy conflicts, uninstall behavior, and future COPR preparation.
+
 Both runtime pieces are required:
 
 1. The Plasma applet package.
