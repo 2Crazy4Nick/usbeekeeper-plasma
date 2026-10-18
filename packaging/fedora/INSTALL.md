@@ -65,8 +65,62 @@ The profile validator and CTest suite run during the RPM build.
 
 For the initial development release, the spec maps Git tag `v0.1.0-dev.1` to
 RPM Version `0.1.0~dev.1`, Release `1%{?dist}`. The tilde makes the development
-version older than stable `0.1.0`. Increment Release for packaging-only changes;
-update Version, upstream_version and Release for new upstream releases.
+version older than stable `0.1.0`. Use the release preparation tool below to
+maintain the version fields and RPM changelog together.
+
+### Prepare a release or packaging update
+
+From a Git checkout with Python 3 and Git available:
+
+```bash
+python3 tools/release.py prepare 0.1.0-dev.2
+```
+
+`prepare` accepts canonical `X.Y.Z` and `X.Y.Z-dev.N` versions, without a `v`
+prefix or leading zeroes. Development counters may start at zero. Other suffixes
+and build metadata are rejected. The requested version must be greater than
+the current upstream version: `dev.10` follows `dev.2`, and stable `0.1.0`
+follows every `0.1.0-dev.N`.
+
+It updates `%global upstream_version`, converts the RPM Version to
+`0.1.0~dev.2`, resets Release to `1%{?dist}`, and synchronizes the CMake project
+VERSION with the numeric base (`0.1.0`). A dated English RPM changelog entry is
+prepended while old entries are preserved. Stable releases omit the RPM tilde.
+
+For a packaging-only update instead:
+
+```bash
+python3 tools/release.py rpm-bump
+```
+
+`rpm-bump` increments the integer Release, preserves `%{?dist}`, and adds a
+packaging-only changelog entry. It leaves the upstream version, RPM Version
+and CMake file untouched. It prints no tag command, so the intended next step
+is a branch push for COPR rather than a new GitHub tag release.
+
+Both commands require a branch checkout and clean tracked target files.
+`prepare` checks the spec and CMake file; `rpm-bump` checks only the spec.
+Unrelated staged or unstaged work is allowed and left alone. Invalid,
+non-increasing and duplicate upstream versions, existing local release tags,
+inconsistent version fields, and unexpected packaging layouts fail before any
+target is written. A second invocation before committing the first update
+refuses the now-dirty target files. Each successful run stages complete file
+contents before replacing targets and retains backups until replacement
+succeeds; ordinary write failures roll back completed replacements.
+
+The tool checks the existing GitHub `v*`/prerelease and COPR archive-naming
+contracts locally. It does not contact GitHub/COPR or check remote-only tags.
+It prints a summary and exact review, commit, push, and (for `prepare`) tag
+commands, but runs none of them. Suggested commits use `--only` to avoid
+including unrelated staged changes. Review the diff and remote state before
+executing those commands. No application behavior or daemon is changed, and
+no external Python dependencies are needed.
+
+Tests are discovered by the existing CTest Python suite, or run them directly:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_release.py
+```
 
 ### Local source generation
 
@@ -132,9 +186,10 @@ buildroot: `gcc-c++`, `cmake`, `cmake-rpm-macros`, `extra-cmake-modules`,
 The existing runtime dependencies and external usbeehived prerequisite remain
 unchanged. COPR needs no custom dependency repository for the build itself.
 
-The target does not change Version or Release. Increment the spec's Release
-for packaging-only updates, or update the version fields for upstream changes,
-before publishing a changed RPM. Rebuilding a newer `main` commit with the
+The source-generation target does not change Version or Release. Use
+`tools/release.py rpm-bump` for packaging-only updates or
+`tools/release.py prepare <version>` for upstream changes before publishing
+a changed RPM. Rebuilding a newer `main` commit with the
 same RPM version/release is not a normal DNF upgrade. No automatic Git snapshot
 versioning policy is introduced.
 
