@@ -94,7 +94,14 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
+            USBeeKeeper is an early development release.
+
+            `usbeehived` is a separate required dependency and must expose
+            `org.usbeehive.Devices5` on the session D-Bus. This release does
+            not bundle or modify usbeehive.
+
             ## Release Assets
 
             | File | Description |
