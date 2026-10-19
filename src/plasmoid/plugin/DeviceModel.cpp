@@ -39,6 +39,14 @@ QString idValue(const QJsonObject &object, std::initializer_list<const char *> n
     return v.isDouble() ? QStringLiteral("0x%1").arg(v.toInt(), 4, 16, QChar('0')) : QString();
 }
 
+QString informationId(const QString &id)
+{
+    static const QRegularExpression hexId(QRegularExpression::anchoredPattern(
+        QStringLiteral("(?:0[xX])?([0-9a-fA-F]{1,4})")));
+    const auto match = hexId.match(id);
+    return match.hasMatch() ? match.captured(1).toLower().rightJustified(4, QLatin1Char('0')) : QString();
+}
+
 QString propertyValue(const QJsonObject &object, const QString &key)
 {
     for (const auto &entry : value(object, {"properties"}).toArray()) {
@@ -420,13 +428,10 @@ void DeviceModel::loadSnapshot(const QString &json)
             device.details.append(QVariantMap{{QStringLiteral("label"), label},
                                               {QStringLiteral("value"), detail}});
         };
-        addDetail(QStringLiteral("Device class"), device.deviceClass);
-        addDetail(QStringLiteral("Device subclass"), device.deviceSubclass);
-        addDetail(QStringLiteral("Serial"), device.serial);
+        const auto information = informationSection(device);
+        if (!information.isEmpty()) device.deviceInformation.append(information);
         addDetail(QStringLiteral("Raw product"), device.product);
         addDetail(QStringLiteral("Manufacturer"), device.manufacturer);
-        addDetail(QStringLiteral("USB version"), device.usbVersion);
-        addDetail(QStringLiteral("Link speed"), device.speedLabel);
         const auto capableSpeed = device.dataRateCapable > 0
             ? rateLabel(device.dataRateCapable) : device.usbCapableSpeed;
         if (!device.hasAltmode || device.dataRateWarning)
@@ -434,11 +439,6 @@ void DeviceModel::loadSnapshot(const QString &json)
         addDetail(QStringLiteral("Capable generation"), device.usbCapableGen);
         if (!device.hasAltmode || device.dataRateWarning)
             addDetail(QStringLiteral("Link status"), verdictLabel(device.dataRateVerdict));
-        if (!device.vendorId.isEmpty() && !device.productId.isEmpty())
-            addDetail(QStringLiteral("VID:PID"), device.vendorId + QStringLiteral(":") + device.productId);
-        addDetail(QStringLiteral("Driver"), device.primaryDriver);
-        if (device.maxPower > 0)
-            addDetail(QStringLiteral("Max USB current"), QStringLiteral("%1 mA").arg(device.maxPower));
         addDetail(QStringLiteral("Power source"), device.powerSource);
         addDetail(QStringLiteral("USB database"), device.productDb);
         addDetail(QStringLiteral("Port"), device.portId);
@@ -450,7 +450,6 @@ void DeviceModel::loadSnapshot(const QString &json)
         if (!device.hubPowerCommitted.isEmpty())
             addDetail(QStringLiteral("Hub committed power"), device.hubPowerCommitted + QStringLiteral(" mA"));
         addDetail(QStringLiteral("Kernel quirks"), device.kernelQuirks);
-        addDetail(QStringLiteral("USB link"), device.speedLabel);
         addDetail(QStringLiteral("Alternate mode"), device.altmodeName);
         addDetail(QStringLiteral("Alternate mode state"), altmodeStateLabel(device.usbAltmodeState));
         device.bullets.clear();
@@ -461,6 +460,40 @@ void DeviceModel::loadSnapshot(const QString &json)
         m_hasSnapshot = true;
         emit hasSnapshotChanged();
     }
+}
+
+QVariantMap DeviceModel::informationSection(const Device &device, const QString &title)
+{
+    QVariantList rows;
+    auto add = [&rows](const QString &label, const QString &value, bool emphasis = false) {
+        const auto text = value.trimmed();
+        if (text.isEmpty() || text.compare(QStringLiteral("unknown"), Qt::CaseInsensitive) == 0
+            || text.compare(QStringLiteral("n/a"), Qt::CaseInsensitive) == 0)
+            return;
+        rows.append(QVariantMap{{QStringLiteral("label"), label},
+                                {QStringLiteral("value"), text},
+                                {QStringLiteral("emphasis"), emphasis}});
+    };
+    const auto vendor = informationId(device.vendorId);
+    const auto product = informationId(device.productId);
+    if (!vendor.isEmpty() && vendor != QLatin1String("0000") && !product.isEmpty())
+        add(tr("VID:PID"), vendor + QLatin1Char(':') + product, true);
+    add(tr("Kernel driver"), device.primaryDriver);
+    // bMaxPower is a declared USB current limit, not measured consumption or PD power.
+    if (device.maxPower > 0)
+        add(tr("Declared max USB current"), tr("%1 mA").arg(device.maxPower));
+    const auto usbVersion = device.usbVersion.trimmed();
+    if (usbVersion != QLatin1String("0") && usbVersion != QLatin1String("0.0"))
+        add(tr("USB version"), usbVersion);
+    const auto speed = device.speed > 0 ? rateLabel(device.speed) : device.speedLabel.trimmed();
+    static const QRegularExpression zeroSpeed(QRegularExpression::anchoredPattern(
+        QStringLiteral("0(?:\\.0+)?(?:\\s*[kmg]?bps)?")), QRegularExpression::CaseInsensitiveOption);
+    if (!zeroSpeed.match(speed).hasMatch()) add(tr("Negotiated link speed"), speed);
+    add(tr("Device class"), device.deviceClass);
+    add(tr("Device subclass"), device.deviceSubclass);
+    add(tr("Serial number"), device.serial);
+    if (rows.isEmpty()) return {};
+    return {{QStringLiteral("title"), title}, {QStringLiteral("rows"), rows}};
 }
 
 void DeviceModel::clearSnapshot(const QString &error, bool available)
@@ -596,20 +629,24 @@ void DeviceModel::rebuildFiltered()
         group.logicalPortNumbers.removeDuplicates();
         group.reportedDownstreamPorts = usb2.hubPortsTotal.toInt() > 0
             ? usb2.hubPortsTotal.toInt() : usb3.hubPortsTotal.toInt();
+        group.deviceInformation.clear();
+        for (const auto &information : {informationSection(usb2, tr("USB 2 function")),
+                                        informationSection(usb3, tr("USB 3 function"))}) {
+            if (!information.isEmpty()) group.deviceInformation.append(information);
+        }
         group.details.clear();
-        addDetail(group, QStringLiteral("Hub ports"), QString::number(group.reportedDownstreamPorts));
+        if (group.reportedDownstreamPorts > 0)
+            addDetail(group, QStringLiteral("Hub ports"), QString::number(group.reportedDownstreamPorts));
         addDetail(group, QStringLiteral("USB 2 companion"), usb2.product);
-        addDetail(group, QStringLiteral("USB 2 link"), usb2.speedLabel);
-        addDetail(group, QStringLiteral("USB 2 ports used"),
-                  QStringLiteral("%1 / %2").arg(usb2.hubPortsUsed, usb2.hubPortsTotal));
+        if (usb2.hubPortsTotal.toInt() > 0 && !usb2.hubPortsUsed.isEmpty())
+            addDetail(group, QStringLiteral("USB 2 ports used"),
+                      QStringLiteral("%1 / %2").arg(usb2.hubPortsUsed, usb2.hubPortsTotal));
         addDetail(group, QStringLiteral("USB 2 port"), usb2.portId);
-        addDetail(group, QStringLiteral("USB 2 VID:PID"), usb2.vendorId + QStringLiteral(":") + usb2.productId);
         addDetail(group, QStringLiteral("USB 3 companion"), usb3.product);
-        addDetail(group, QStringLiteral("USB 3 link"), usb3.speedLabel);
-        addDetail(group, QStringLiteral("USB 3 ports used"),
-                  QStringLiteral("%1 / %2").arg(usb3.hubPortsUsed, usb3.hubPortsTotal));
+        if (usb3.hubPortsTotal.toInt() > 0 && !usb3.hubPortsUsed.isEmpty())
+            addDetail(group, QStringLiteral("USB 3 ports used"),
+                      QStringLiteral("%1 / %2").arg(usb3.hubPortsUsed, usb3.hubPortsTotal));
         addDetail(group, QStringLiteral("USB 3 port"), usb3.portId);
-        addDetail(group, QStringLiteral("USB 3 VID:PID"), usb3.vendorId + QStringLiteral(":") + usb3.productId);
         addDetail(group, QStringLiteral("Container ID"), group.containerId);
         addDetail(group, QStringLiteral("USB database"), !usb2.productDb.isEmpty() ? usb2.productDb : usb3.productDb);
         group.usb2Product = usb2.product;
@@ -1297,6 +1334,7 @@ QVariant DeviceModel::data(const QModelIndex &index, int role) const
     case PhysicalInstanceKeyRole: return device.physicalInstanceKey;
     case PhysicalInstanceKeySourceRole: return device.physicalInstanceKeySource;
     case PhysicalAliasIdentityAmbiguousRole: return device.physicalAliasIdentityAmbiguous;
+    case DeviceInformationRole: return device.deviceInformation;
     }
     return {};
 }
@@ -1353,7 +1391,8 @@ QHash<int, QByteArray> DeviceModel::roleNames() const
         {PhysicalRelationshipSourceRole,"physicalRelationshipSource"},
         {PhysicalRelationshipEvidenceRole,"physicalRelationshipEvidence"},
         {PhysicalInstanceKeyRole,"physicalInstanceKey"},{PhysicalInstanceKeySourceRole,"physicalInstanceKeySource"},
-        {PhysicalAliasIdentityAmbiguousRole,"physicalAliasIdentityAmbiguous"}};
+        {PhysicalAliasIdentityAmbiguousRole,"physicalAliasIdentityAmbiguous"},
+        {DeviceInformationRole,"deviceInformation"}};
 }
 
 } // namespace USBeeKeeper

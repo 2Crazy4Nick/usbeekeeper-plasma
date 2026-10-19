@@ -84,9 +84,149 @@ static QJsonObject profileJson(const QJsonValue &logicalPort)
     };
 }
 
+static QVariantMap informationRows(const QVariantMap &section)
+{
+    QVariantMap result;
+    for (const auto &row : section.value(QStringLiteral("rows")).toList()) {
+        const auto detail = row.toMap();
+        result.insert(detail.value(QStringLiteral("label")).toString(), detail.value(QStringLiteral("value")));
+    }
+    return result;
+}
+
+static bool testDeviceInformation()
+{
+    DeviceModel model;
+    auto *client = model.findChild<UsbeehiveClient *>();
+    if (!client) return false;
+    model.setShowHubs(true);
+    auto device = usbDevice(QStringLiteral("Example device"), QStringLiteral("0x0BDA"),
+                            QStringLiteral("0411"), QStringLiteral("usb1-port1"), {}, {}, false);
+    device[QStringLiteral("vendorId")] = 0x0bda;
+    device[QStringLiteral("productId")] = 0x0411;
+    device[QStringLiteral("primaryDriver")] = QStringLiteral("example-driver");
+    device[QStringLiteral("usbVersion")] = QStringLiteral("3.0");
+    device[QStringLiteral("deviceClass")] = QStringLiteral("Per-interface");
+    device[QStringLiteral("deviceSubclass")] = QStringLiteral("0x00");
+    device[QStringLiteral("usb")] = QJsonObject{
+        {QStringLiteral("speed"), 5000}, {QStringLiteral("maxPowerMA"), 500},
+        {QStringLiteral("serial"), QStringLiteral("example-serial")},
+    };
+    device[QStringLiteral("power")] = QJsonObject{{QStringLiteral("powerMw"), 90000}};
+    auto properties = device.value(QStringLiteral("properties")).toArray();
+    properties.append(QJsonArray{QStringLiteral("product_db"), QStringLiteral("Example controller")});
+    device[QStringLiteral("properties")] = properties;
+    device[QStringLiteral("dataRate")] = QJsonObject{
+        {QStringLiteral("capable_mbps"), 10000},
+        {QStringLiteral("summary"), QStringLiteral("Example diagnostic")},
+        {QStringLiteral("is_warning"), true},
+    };
+    auto load = [&](const QJsonArray &devices) {
+        emit client->snapshotReady(QJsonDocument(devices).toJson(QJsonDocument::Compact));
+    };
+    load({device});
+    auto sections = role(model, 0, "deviceInformation").toList();
+    if (sections.size() != 1) return false;
+    auto rows = informationRows(sections.first().toMap());
+    if (rows.value(QStringLiteral("VID:PID")) != QStringLiteral("0bda:0411")
+        || rows.value(QStringLiteral("Kernel driver")) != QStringLiteral("example-driver")
+        || rows.value(QStringLiteral("Declared max USB current")) != QStringLiteral("500 mA")
+        || rows.value(QStringLiteral("USB version")) != QStringLiteral("3.0")
+        || rows.value(QStringLiteral("Negotiated link speed")) != QStringLiteral("5 Gbps")
+        || rows.value(QStringLiteral("Device class")) != QStringLiteral("Per-interface")
+        || rows.value(QStringLiteral("Device subclass")) != QStringLiteral("0x00")
+        || rows.value(QStringLiteral("Serial number")) != QStringLiteral("example-serial")) return false;
+    const auto primary = sections.first().toMap().value(QStringLiteral("rows")).toList();
+    if (primary.first().toMap().value(QStringLiteral("label")) != QStringLiteral("VID:PID")) return false;
+    bool hasDatabase = false;
+    for (const auto &detail : role(model, 0, "details").toList()) {
+        const auto label = detail.toMap().value(QStringLiteral("label")).toString();
+        if (label == QLatin1String("USB database"))
+            hasDatabase = detail.toMap().value(QStringLiteral("value")) == QStringLiteral("Example controller");
+        if (rows.contains(label) || label == QLatin1String("USB link")
+            || label == QLatin1String("Link speed") || label == QLatin1String("Max USB current")
+            || label == QLatin1String("Driver") || label == QLatin1String("Serial")) return false;
+    }
+    if (!hasDatabase || role(model, 0, "dataRateSummary") != QStringLiteral("Example diagnostic")
+        || !role(model, 0, "dataRateWarning").toBool()) return false;
+
+    device[QStringLiteral("vendorId")] = QStringLiteral("0xABC");
+    device[QStringLiteral("productId")] = QStringLiteral("0000");
+    load({device});
+    sections = role(model, 0, "deviceInformation").toList();
+    if (sections.size() != 1) return false;
+    rows = informationRows(sections.first().toMap());
+    if (rows.value(QStringLiteral("VID:PID")) != QStringLiteral("0abc:0000")) return false;
+
+    auto unknown = QJsonObject{{QStringLiteral("headline"), QStringLiteral("Missing fields")},
+        {QStringLiteral("vendorId"), 0}, {QStringLiteral("productId"), 0},
+        {QStringLiteral("primaryDriver"), QStringLiteral("unknown")},
+        {QStringLiteral("usbVersion"), QStringLiteral(" 0.0 ")},
+        {QStringLiteral("usb"), QJsonObject{{QStringLiteral("speed"), 0},
+                                          {QStringLiteral("speedLabel"), QStringLiteral("0 Mbps")},
+                                          {QStringLiteral("maxPowerMA"), 0}}}};
+    load({unknown});
+    if (!role(model, 0, "deviceInformation").toList().isEmpty()) return false;
+    unknown[QStringLiteral("vendorId")] = QStringLiteral("not-hex");
+    unknown[QStringLiteral("productId")] = QStringLiteral("0001\n");
+    load({unknown});
+    if (!role(model, 0, "deviceInformation").toList().isEmpty()) return false;
+    auto unknownUsb = unknown.value(QStringLiteral("usb")).toObject();
+    unknownUsb[QStringLiteral("speedLabel")] = QStringLiteral("Full Speed");
+    unknown[QStringLiteral("usb")] = unknownUsb;
+    load({unknown});
+    sections = role(model, 0, "deviceInformation").toList();
+    if (sections.size() != 1) return false;
+    rows = informationRows(sections.first().toMap());
+    if (rows.size() != 1 || rows.value(QStringLiteral("Negotiated link speed")) != QStringLiteral("Full Speed"))
+        return false;
+
+    auto usb2 = usbDevice(QStringLiteral("USB 2 hub"), QStringLiteral("0x1234"),
+                          QStringLiteral("0x0001"), QStringLiteral("usb1-port1"),
+                          QStringLiteral("usb2-port1"), QStringLiteral("usb2"), true);
+    auto usb3 = usbDevice(QStringLiteral("USB 3 hub"), QStringLiteral("0x1234"),
+                          QStringLiteral("0x0002"), QStringLiteral("usb2-port1"),
+                          QStringLiteral("usb1-port1"), QStringLiteral("usb3"), true);
+    usb2[QStringLiteral("primaryDriver")] = QStringLiteral("hub");
+    usb3[QStringLiteral("primaryDriver")] = QStringLiteral("hub");
+    auto usb2Data = usb2.value(QStringLiteral("usb")).toObject();
+    usb2Data[QStringLiteral("maxPowerMA")] = 100;
+    usb2Data[QStringLiteral("serial")] = QStringLiteral("example-usb2-serial");
+    usb2[QStringLiteral("usb")] = usb2Data;
+    auto usb3Data = usb3.value(QStringLiteral("usb")).toObject();
+    usb3Data[QStringLiteral("maxPowerMA")] = 500;
+    usb3Data[QStringLiteral("serial")] = QStringLiteral("example-usb3-serial");
+    usb3[QStringLiteral("usb")] = usb3Data;
+    load({usb2, usb3});
+    if (model.rowCount() != 1 || !role(model, 0, "isCompanionHubGroup").toBool()) return false;
+    sections = role(model, 0, "deviceInformation").toList();
+    if (sections.size() != 2) return false;
+    const auto rows2 = informationRows(sections[0].toMap());
+    const auto rows3 = informationRows(sections[1].toMap());
+    if (sections[0].toMap().value(QStringLiteral("title")) != QStringLiteral("USB 2 function")
+        || sections[1].toMap().value(QStringLiteral("title")) != QStringLiteral("USB 3 function")
+        || rows2.value(QStringLiteral("VID:PID")) != QStringLiteral("1234:0001")
+        || rows3.value(QStringLiteral("VID:PID")) != QStringLiteral("1234:0002")
+        || rows2.value(QStringLiteral("Declared max USB current")) != QStringLiteral("100 mA")
+        || rows3.value(QStringLiteral("Declared max USB current")) != QStringLiteral("500 mA")
+        || rows2.value(QStringLiteral("Negotiated link speed")) != QStringLiteral("480 Mbps")
+        || rows3.value(QStringLiteral("Negotiated link speed")) != QStringLiteral("5 Gbps")
+        || rows2.value(QStringLiteral("Serial number")) != QStringLiteral("example-usb2-serial")
+        || rows3.value(QStringLiteral("Serial number")) != QStringLiteral("example-usb3-serial")) return false;
+    for (const auto &detail : role(model, 0, "details").toList()) {
+        const auto label = detail.toMap().value(QStringLiteral("label")).toString();
+        if (label.contains(QStringLiteral("VID:PID")) || label.endsWith(QStringLiteral(" link"))) return false;
+    }
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    if (!testDeviceInformation()) {
+        std::fprintf(stderr, "Device information regression failed\n");
+        return 50;
+    }
     DeviceModel model;
     auto *client = model.findChild<UsbeehiveClient *>();
     if (!client) return 1;

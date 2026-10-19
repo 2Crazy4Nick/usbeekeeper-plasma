@@ -12,9 +12,46 @@ ColumnLayout {
     property real treeIndentStep: Kirigami.Units.gridUnit * 1.25
     property bool editingPhysicalAlias: false
     property string physicalAliasDraft: model.physicalName || ""
+    readonly property var deviceData: model
 
     signal physicalAliasSubmitted(string key, string alias)
     signal physicalAliasCleared(string key)
+
+    // Reuse the same responsive row for primary information and advanced details.
+    component DetailRow: GridLayout {
+        id: detailRow
+        objectName: "deviceDetailRow"
+        property string labelText
+        property string valueText
+        property bool emphasis: false
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        columns: width < Kirigami.Units.gridUnit * 14 ? 1 : 2
+        columnSpacing: Kirigami.Units.smallSpacing
+        rowSpacing: Kirigami.Units.smallSpacing / 2
+
+        PlasmaComponents.Label {
+            text: detailRow.labelText + ":"
+            textFormat: Text.PlainText
+            opacity: 0.65
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            wrapMode: Text.Wrap
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: detailRow.columns === 2 ? Kirigami.Units.gridUnit * 7 : Infinity
+            Layout.preferredWidth: detailRow.columns === 2 ? Kirigami.Units.gridUnit * 7 : -1
+        }
+
+        PlasmaComponents.Label {
+            text: detailRow.valueText
+            textFormat: Text.PlainText
+            font.bold: detailRow.emphasis
+            font.pointSize: Kirigami.Theme.smallFont.pointSize
+            wrapMode: Text.WrapAnywhere
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+        }
+    }
 
     Item {
         id: cardRow
@@ -200,6 +237,60 @@ ColumnLayout {
                 }
             }
 
+            // Primary technical identity, before the more detailed diagnostics.
+            ColumnLayout {
+                id: deviceInformation
+                objectName: "deviceInformation"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                visible: card.expanded && (card.deviceData.deviceInformation || []).length > 0
+                spacing: Kirigami.Units.smallSpacing
+
+                Kirigami.Separator {
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Label {
+                    text: i18n("Device Information")
+                    font.bold: true
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                Repeater {
+                    model: card.deviceData.deviceInformation || []
+
+                    ColumnLayout {
+                        required property var modelData
+                        id: informationSection
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        spacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents.Label {
+                            text: informationSection.modelData.title
+                            textFormat: Text.PlainText
+                            visible: text.length > 0
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
+                        }
+
+                        Repeater {
+                            model: informationSection.modelData.rows
+
+                            DetailRow {
+                                required property var modelData
+                                labelText: modelData.label
+                                valueText: modelData.value
+                                emphasis: modelData.emphasis || false
+                            }
+                        }
+                    }
+                }
+            }
+
             // Link diagnostics (shown when expanded)
             ColumnLayout {
                 Layout.fillWidth: true
@@ -293,33 +384,19 @@ ColumnLayout {
                              && (model.physicalRelationshipSource || "").length > 0
                     opacity: 0.7
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
+                    wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
 
                 Repeater {
-                    model: model.details || []
+                    model: card.deviceData.details || []
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Kirigami.Units.smallSpacing
-
-                        PlasmaComponents.Label {
-                            text: (model.physicalRelationshipType === "integrated_function"
+                    DetailRow {
+                        required property var modelData
+                        labelText: (card.deviceData.physicalRelationshipType === "integrated_function"
                                    && modelData.label === "Port")
-                                ? "Logical downstream port:"
-                                : modelData.label + ":"
-                            opacity: 0.5
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                        }
-
-                        PlasmaComponents.Label {
-                            text: modelData.value
-                            font.pointSize: Kirigami.Theme.smallFont.pointSize
-                            wrapMode: Text.WrapAnywhere
-                            Layout.minimumWidth: 0
-                            Layout.fillWidth: true
-                        }
+                            ? "Logical downstream port" : modelData.label
+                        valueText: modelData.value
                     }
                 }
             }

@@ -1,10 +1,10 @@
-%global upstream_version 0.1.0-dev.1
+%global upstream_version 0.1.0-dev.2
 %global applet_id io.github._2crazy4nick.usbeekeeper
 %global qml_module io/github/_2crazy4nick/usbeekeeper
 
 Name:           usbeekeeper
-Version:        0.1.0~dev.1
-Release:        2%{?dist}
+Version:        0.1.0~dev.2
+Release:        1%{?dist}
 Summary:        KDE Plasma USB inspection and topology widget
 
 License:        MIT
@@ -77,6 +77,9 @@ python3 tools/validate_profiles.py
 %{_qt6_qmldir}/%{qml_module}/
 
 %changelog
+* Sun Oct 18 2026 USBeeKeeper contributors - 0.1.0~dev.2-1
+- Prepare development release 0.1.0-dev.2.
+
 * Sun Oct 18 2026 USBeeKeeper contributors - 0.1.0~dev.1-2
 - Verify automatic COPR update delivery.
 

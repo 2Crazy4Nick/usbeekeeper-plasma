@@ -152,6 +152,7 @@ public:
         PhysicalInstanceKeyRole,
         PhysicalInstanceKeySourceRole,
         PhysicalAliasIdentityAmbiguousRole,
+        DeviceInformationRole,
     };
     Q_ENUM(Roles)
 
@@ -198,7 +199,7 @@ private:
         QString linkSummary, dataRateSummary, dataRateDetail, dataRateVerdict;
         int dataRateCapable = 0, dataRateNegotiated = 0;
         bool dataRateWarning = false;
-        QVariantList details;
+        QVariantList details, deviceInformation;
         QString usbCapableSpeed, usbCapableGen, usbLinkVerdict;
         QString portId, portPeerId, portPeerState, portConnectType;
         QString hubPortsTotal, hubPortsUsed, hubPowerCommitted;
@@ -241,6 +242,7 @@ private:
     };
 
     void loadSnapshot(const QString &json);
+    static QVariantMap informationSection(const Device &device, const QString &title = {});
     void clearSnapshot(const QString &error, bool available);
     void reportSnapshotError(const QString &error, bool available);
     void rebuildFiltered();
