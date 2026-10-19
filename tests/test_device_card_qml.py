@@ -8,9 +8,25 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 
 class DeviceCardQmlTests(unittest.TestCase):
+    def test_detail_settings_use_per_applet_configuration(self):
+        root = Path(__file__).resolve().parents[1]
+        config = ET.parse(root / "src/plasmoid/contents/config/main.xml")
+        ns = {"k": "http://www.kde.org/standards/kcfg/1.0"}
+        entries = {entry.attrib["name"]: entry for entry in config.findall(".//k:entry", ns)}
+        level = entries["deviceInformationDetailLevel"]
+        self.assertEqual(level.attrib["type"], "String")
+        self.assertEqual(level.find("k:default", ns).text, "standard")
+        controls = entries["showPhysicalDeviceRenamingControls"]
+        self.assertEqual(controls.attrib["type"], "Bool")
+        self.assertEqual(controls.find("k:default", ns).text, "false")
+        main = (root / "src/plasmoid/contents/ui/main.qml").read_text()
+        self.assertIn('informationDetailLevel: Plasmoid.configuration.deviceInformationDetailLevel || "standard"', main)
+        self.assertIn('showPhysicalDeviceRenamingControls: Plasmoid.configuration.showPhysicalDeviceRenamingControls || false', main)
+
     def test_applet_metadata_has_full_upstream_version(self):
         root = Path(__file__).resolve().parents[1]
         upstream = re.search(r"(?m)^%global upstream_version (\S+)$",

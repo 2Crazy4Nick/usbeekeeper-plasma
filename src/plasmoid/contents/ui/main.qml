@@ -130,6 +130,8 @@ PlasmoidItem {
                 delegate: DeviceCard {
                     width: deviceListView.width
                     topologyTreeActive: deviceModel.showHubs && deviceModel.showTopologyTree
+                    informationDetailLevel: Plasmoid.configuration.deviceInformationDetailLevel || "standard"
+                    showPhysicalDeviceRenamingControls: Plasmoid.configuration.showPhysicalDeviceRenamingControls || false
                     onPhysicalAliasSubmitted: root.updatePhysicalAlias(key, alias)
                     onPhysicalAliasCleared: root.updatePhysicalAlias(key, "")
                 }

@@ -9,10 +9,43 @@ ColumnLayout {
 
     property bool expanded: false
     property bool topologyTreeActive: false
+    property string informationDetailLevel: "standard"
+    property bool showPhysicalDeviceRenamingControls: false
     property real treeIndentStep: Kirigami.Units.gridUnit * 1.25
     property bool editingPhysicalAlias: false
     property string physicalAliasDraft: model.physicalName || ""
     readonly property var deviceData: model
+    readonly property int detailRank: informationDetailLevel === "debug" ? 2
+        : informationDetailLevel === "extended" ? 1 : 0
+    readonly property var informationSections: {
+        var sections = card.deviceData.deviceInformation || []
+        var result = []
+        for (var i = 0; i < sections.length; ++i) {
+            var rows = card.visibleDetails(sections[i].rows)
+            if (rows.length > 0) result.push({title: sections[i].title, rows: rows})
+        }
+        return result
+    }
+    readonly property var advancedDetails: visibleDetails(card.deviceData.details)
+    readonly property bool canRenamePhysicalDevice: (model.physicalInstanceKey || "").length > 0
+        && !(model.physicalAliasIdentityAmbiguous || false)
+        && ((model.physicalRelationshipType || "").length === 0
+            || model.physicalRelationshipType === "root")
+
+    function visibleDetails(rows) {
+        return (rows || []).filter(function(row) {
+            // Unknown/unclassified technical rows stay out of the standard view.
+            var level = typeof row.detailLevel === "number" ? row.detailLevel : 2
+            if (level > card.detailRank || row.field === "linkSpeed") return false
+            if (row.field === "usbVersion")
+                return (card.deviceData.linkSummary || "").indexOf("USB " + row.value) < 0
+            return true
+        })
+    }
+
+    onShowPhysicalDeviceRenamingControlsChanged: {
+        if (!showPhysicalDeviceRenamingControls) editingPhysicalAlias = false
+    }
 
     signal physicalAliasSubmitted(string key, string alias)
     signal physicalAliasCleared(string key)
@@ -243,7 +276,7 @@ ColumnLayout {
                 objectName: "deviceInformation"
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                visible: card.expanded && (card.deviceData.deviceInformation || []).length > 0
+                visible: card.expanded && card.informationSections.length > 0
                 spacing: Kirigami.Units.smallSpacing
 
                 Kirigami.Separator {
@@ -258,7 +291,7 @@ ColumnLayout {
                 }
 
                 Repeater {
-                    model: card.deviceData.deviceInformation || []
+                    model: card.informationSections
 
                     ColumnLayout {
                         required property var modelData
@@ -371,7 +404,7 @@ ColumnLayout {
 
                 PlasmaComponents.Label {
                     text: "Integrated USB function of the parent physical device"
-                    visible: model.physicalRelationshipType === "integrated_function"
+                    visible: card.detailRank >= 1 && model.physicalRelationshipType === "integrated_function"
                     opacity: 0.7
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                     wrapMode: Text.WordWrap
@@ -380,7 +413,7 @@ ColumnLayout {
 
                 PlasmaComponents.Label {
                     text: "Relationship source: " + (model.physicalRelationshipSource || "")
-                    visible: model.physicalRelationshipType === "integrated_function"
+                    visible: card.detailRank >= 2 && model.physicalRelationshipType === "integrated_function"
                              && (model.physicalRelationshipSource || "").length > 0
                     opacity: 0.7
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -389,7 +422,7 @@ ColumnLayout {
                 }
 
                 Repeater {
-                    model: card.deviceData.details || []
+                    model: card.advancedDetails
 
                     DetailRow {
                         required property var modelData
@@ -404,14 +437,14 @@ ColumnLayout {
             // Optional user-defined physical identity. This is separate from
             // the logical USB display identity and is intentionally compact.
             ColumnLayout {
+                objectName: "physicalAliasSection"
                 Layout.fillWidth: true
-                visible: card.expanded && (model.physicalInstanceKey || "").length > 0
-                         && !(model.physicalAliasIdentityAmbiguous || false)
-                         && ((model.physicalRelationshipType || "").length === 0
-                             || model.physicalRelationshipType === "root")
+                visible: card.expanded && card.canRenamePhysicalDevice
+                         && (card.showPhysicalDeviceRenamingControls || (model.physicalName || "").length > 0)
                 spacing: 2
 
                 PlasmaComponents.Label {
+                    objectName: "physicalAliasName"
                     text: "Physical device name: " + (model.physicalName || "")
                     visible: (model.physicalName || "").length > 0
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -421,7 +454,8 @@ ColumnLayout {
 
                 PlasmaComponents.Label {
                     text: "This name may be tied to the current USB port."
-                    visible: (model.physicalInstanceKeySource || "") === "topology_fallback"
+                    visible: card.showPhysicalDeviceRenamingControls
+                             && (model.physicalInstanceKeySource || "") === "topology_fallback"
                     opacity: 0.7
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
                     wrapMode: Text.WordWrap
@@ -429,8 +463,9 @@ ColumnLayout {
                 }
 
                 RowLayout {
+                    objectName: "physicalAliasEditor"
                     Layout.fillWidth: true
-                    visible: card.editingPhysicalAlias
+                    visible: card.showPhysicalDeviceRenamingControls && card.editingPhysicalAlias
 
                     PlasmaComponents.TextField {
                         text: card.physicalAliasDraft
@@ -454,8 +489,9 @@ ColumnLayout {
                 }
 
                 RowLayout {
+                    objectName: "physicalAliasActions"
                     Layout.fillWidth: true
-                    visible: !card.editingPhysicalAlias
+                    visible: card.showPhysicalDeviceRenamingControls && !card.editingPhysicalAlias
 
                     PlasmaComponents.Button {
                         text: (model.physicalName || "").length > 0

@@ -108,4 +108,14 @@ if(BUILD_TESTING)
     target_link_libraries(device_model_regression_tests PRIVATE
         Qt6::Core Qt6::DBus Qt6::Quick)
     add_test(NAME device_model_regression_tests COMMAND device_model_regression_tests)
+
+    add_executable(device_card_model_tests "${CMAKE_SOURCE_DIR}/tests/device_card_model_test.cpp")
+    target_link_libraries(device_card_model_tests PRIVATE Qt6::Quick)
+    add_dependencies(device_card_model_tests usbeekeeper-plasmoid-package)
+    add_test(NAME device_card_model_tests COMMAND device_card_model_tests
+        "${CMAKE_SOURCE_DIR}/tests/qml/device_information_model_probe.qml")
+    # Snapshots are injected through the real client signal. Do not let desktop
+    # services or the user's real session bus affect this offscreen test.
+    set_tests_properties(device_card_model_tests PROPERTIES TIMEOUT 30 ENVIRONMENT
+        "QT_QPA_PLATFORM=offscreen;QT_QPA_PLATFORMTHEME=generic;QT_QUICK_BACKEND=software;DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null;QML_IMPORT_PATH=${CMAKE_BINARY_DIR}/qml;QML_DISABLE_DISK_CACHE=1;QT_FORCE_STDERR_LOGGING=1;QT_LOGGING_TO_CONSOLE=1")
 endif()

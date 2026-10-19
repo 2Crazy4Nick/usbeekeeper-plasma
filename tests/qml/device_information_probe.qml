@@ -15,6 +15,7 @@ Window {
         id: card
         width: Kirigami.Units.gridUnit * 24
         height: implicitHeight
+        informationDetailLevel: "debug"
         property var model: ({
             physicalName: "", physicalRelationshipType: "integrated_function",
             physicalRelationshipSource: "profile", category: "usb",
@@ -26,20 +27,20 @@ Window {
             presentationTreeAncestorLastFlags: [true, false, false], presentationTreeIsLastChild: true,
             deviceInformation: [
                 {title: "USB 2 function", rows: [
-                    {label: "VID:PID", value: "1234:0001", emphasis: true},
-                    {label: "Declared max USB current", value: "500 mA"},
-                    {label: "Kernel driver", value: "long-example-driver-name-without-spaces"},
-                    {label: "Serial number", value: "example-serial-value-with-a-very-long-suffix"}
+                    {label: "VID:PID", value: "1234:0001", emphasis: true, detailLevel: 0},
+                    {label: "Declared max USB current", value: "500 mA", detailLevel: 0},
+                    {label: "Kernel driver", value: "long-example-driver-name-without-spaces", detailLevel: 0},
+                    {label: "Serial number", value: "example-serial-value-with-a-very-long-suffix", detailLevel: 1}
                 ]},
                 {title: "USB 3 function", rows: [
-                    {label: "VID:PID", value: "1234:0002", emphasis: true},
-                    {label: "Negotiated link speed", value: "5 Gbps"}
+                    {label: "VID:PID", value: "1234:0002", emphasis: true, detailLevel: 0},
+                    {label: "Device class", value: "Hub", detailLevel: 1}
                 ]}
             ],
             dataRateSummary: "Example diagnostic with enough words to wrap at narrow widths.",
             dataRateDetail: "Example diagnostic detail.",
-            details: [{label: "USB database", value: "Long example database name for a USB controller"},
-                      {label: "Port", value: "1-1-port4"}]
+            details: [{label: "USB database", value: "Long example database name for a USB controller", detailLevel: 2},
+                      {label: "Port", value: "1-1-port4", detailLevel: 2}]
         })
         // Plasma supplies the translation function in the real applet context.
         function i18n(text) { return text }

@@ -1,5 +1,8 @@
 #include <QFile>
 #include <QGuiApplication>
+#include <QAbstractItemModel>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QQmlApplicationEngine>
 #include <QTimer>
 
@@ -37,7 +40,15 @@ int main(int argc, char **argv)
         source.replace("\"../../src/plasmoid/contents/ui\"",
                        QByteArray("\"") + QUrl::fromLocalFile(app.arguments().at(2)).toEncoded() + '"');
     }
+    bool qmlError = false;
     QQmlApplicationEngine engine;
+    QObject::connect(&engine, &QQmlEngine::warnings, &engine, [&qmlError](const QList<QQmlError> &errors) {
+        for (const auto &error : errors) {
+            const auto message = error.description();
+            if (message.contains(QStringLiteral("Error:")) || message.contains(QStringLiteral("Binding loop"))
+                || message.contains(QStringLiteral("Unable to assign"))) qmlError = true;
+        }
+    });
     QObject::connect(&engine, &QQmlApplicationEngine::quit, &app, &QCoreApplication::quit);
     QObject::connect(&engine, &QQmlApplicationEngine::exit, &app, &QCoreApplication::exit);
     QTimer::singleShot(15000, &app, [] { QCoreApplication::exit(5); });
@@ -53,5 +64,13 @@ int main(int argc, char **argv)
     if (!client || !QMetaObject::invokeMethod(client, "snapshotReady", Qt::DirectConnection,
                                              Q_ARG(QString, snapshot))) return 3;
     if (model->property("count").toInt() != 2) return 7;
-    return app.exec();
+    auto *rows = qobject_cast<QAbstractItemModel *>(model);
+    if (!rows) return 8;
+    const auto keyRole = rows->roleNames().key(QByteArrayLiteral("physicalInstanceKey"), -1);
+    const auto key = rows->data(rows->index(0, 0), keyRole).toString();
+    if (key.isEmpty()) return 9;
+    model->setProperty("userAliasesJson", QString::fromUtf8(QJsonDocument(QJsonObject{
+        {key, QStringLiteral("Example physical alias")}}).toJson(QJsonDocument::Compact)));
+    const auto result = app.exec();
+    return qmlError ? 10 : result;
 }

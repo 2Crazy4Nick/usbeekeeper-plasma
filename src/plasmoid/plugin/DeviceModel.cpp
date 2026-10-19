@@ -422,25 +422,30 @@ void DeviceModel::loadSnapshot(const QString &json)
         for (const auto &pdo : device.sourcePdos)
             device.maxSourcePower = qMax(device.maxSourcePower, intValue(pdo.toObject(), {"powerMw", "power_mw"}) / 1000);
 
-        auto addDetail = [&device](const QString &label, const QString &detail) {
+        // Presentation-only minimum levels: standard=0, extended=1, debug=2.
+        auto addDetail = [&device](const QString &label, const QString &detail, int level = 2) {
             if (detail.isEmpty() || detail.compare(QStringLiteral("unknown"), Qt::CaseInsensitive) == 0)
                 return;
             device.details.append(QVariantMap{{QStringLiteral("label"), label},
-                                              {QStringLiteral("value"), detail}});
+                                              {QStringLiteral("value"), detail},
+                                              {QStringLiteral("detailLevel"), level}});
         };
         const auto information = informationSection(device);
         if (!information.isEmpty()) device.deviceInformation.append(information);
-        addDetail(QStringLiteral("Raw product"), device.product);
-        addDetail(QStringLiteral("Manufacturer"), device.manufacturer);
-        const auto capableSpeed = device.dataRateCapable > 0
-            ? rateLabel(device.dataRateCapable) : device.usbCapableSpeed;
+        addDetail(QStringLiteral("Raw product"), device.product, 1);
+        addDetail(QStringLiteral("Manufacturer"), device.manufacturer, 1);
+        const auto capableMbps = device.dataRateCapable > 0
+            ? device.dataRateCapable : device.usbCapableSpeed.toInt();
+        const auto negotiatedMbps = device.speed > 0 ? device.speed : device.dataRateNegotiated;
+        if ((!device.hasAltmode || device.dataRateWarning)
+            && capableMbps > 0 && negotiatedMbps > 0 && capableMbps != negotiatedMbps)
+            addDetail(QStringLiteral("Capable speed"), rateLabel(capableMbps), 1);
+        addDetail(QStringLiteral("Capable generation"), device.usbCapableGen, 1);
         if (!device.hasAltmode || device.dataRateWarning)
-            addDetail(QStringLiteral("Capable speed"), capableSpeed);
-        addDetail(QStringLiteral("Capable generation"), device.usbCapableGen);
-        if (!device.hasAltmode || device.dataRateWarning)
-            addDetail(QStringLiteral("Link status"), verdictLabel(device.dataRateVerdict));
-        addDetail(QStringLiteral("Power source"), device.powerSource);
+            addDetail(QStringLiteral("Link status"), verdictLabel(device.dataRateVerdict), 1);
+        addDetail(QStringLiteral("Power source"), device.powerSource, 1);
         addDetail(QStringLiteral("USB database"), device.productDb);
+        addDetail(QStringLiteral("Container ID"), device.containerId);
         addDetail(QStringLiteral("Port"), device.portId);
         addDetail(QStringLiteral("Companion port"), device.portPeerId);
         addDetail(QStringLiteral("Companion state"), device.portPeerState);
@@ -450,8 +455,8 @@ void DeviceModel::loadSnapshot(const QString &json)
         if (!device.hubPowerCommitted.isEmpty())
             addDetail(QStringLiteral("Hub committed power"), device.hubPowerCommitted + QStringLiteral(" mA"));
         addDetail(QStringLiteral("Kernel quirks"), device.kernelQuirks);
-        addDetail(QStringLiteral("Alternate mode"), device.altmodeName);
-        addDetail(QStringLiteral("Alternate mode state"), altmodeStateLabel(device.usbAltmodeState));
+        addDetail(QStringLiteral("Alternate mode"), device.altmodeName, 1);
+        addDetail(QStringLiteral("Alternate mode state"), altmodeStateLabel(device.usbAltmodeState), 1);
         device.bullets.clear();
         m_devices.append(device);
     }
@@ -465,30 +470,34 @@ void DeviceModel::loadSnapshot(const QString &json)
 QVariantMap DeviceModel::informationSection(const Device &device, const QString &title)
 {
     QVariantList rows;
-    auto add = [&rows](const QString &label, const QString &value, bool emphasis = false) {
+    auto add = [&rows](const QString &label, const QString &value, bool emphasis = false,
+                      int level = 1, const QString &field = {}) {
         const auto text = value.trimmed();
         if (text.isEmpty() || text.compare(QStringLiteral("unknown"), Qt::CaseInsensitive) == 0
             || text.compare(QStringLiteral("n/a"), Qt::CaseInsensitive) == 0)
             return;
         rows.append(QVariantMap{{QStringLiteral("label"), label},
                                 {QStringLiteral("value"), text},
-                                {QStringLiteral("emphasis"), emphasis}});
+                                {QStringLiteral("emphasis"), emphasis},
+                                {QStringLiteral("detailLevel"), level},
+                                {QStringLiteral("field"), field}});
     };
     const auto vendor = informationId(device.vendorId);
     const auto product = informationId(device.productId);
     if (!vendor.isEmpty() && vendor != QLatin1String("0000") && !product.isEmpty())
-        add(tr("VID:PID"), vendor + QLatin1Char(':') + product, true);
-    add(tr("Kernel driver"), device.primaryDriver);
+        add(tr("VID:PID"), vendor + QLatin1Char(':') + product, true, 0);
+    add(tr("Kernel driver"), device.primaryDriver, false, 0);
     // bMaxPower is a declared USB current limit, not measured consumption or PD power.
     if (device.maxPower > 0)
-        add(tr("Declared max USB current"), tr("%1 mA").arg(device.maxPower));
+        add(tr("Declared max USB current"), tr("%1 mA").arg(device.maxPower), false, 0);
     const auto usbVersion = device.usbVersion.trimmed();
     if (usbVersion != QLatin1String("0") && usbVersion != QLatin1String("0.0"))
-        add(tr("USB version"), usbVersion);
+        add(tr("USB version"), usbVersion, false, 1, QStringLiteral("usbVersion"));
     const auto speed = device.speed > 0 ? rateLabel(device.speed) : device.speedLabel.trimmed();
     static const QRegularExpression zeroSpeed(QRegularExpression::anchoredPattern(
         QStringLiteral("0(?:\\.0+)?(?:\\s*[kmg]?bps)?")), QRegularExpression::CaseInsensitiveOption);
-    if (!zeroSpeed.match(speed).hasMatch()) add(tr("Negotiated link speed"), speed);
+    if (!zeroSpeed.match(speed).hasMatch())
+        add(tr("Negotiated link speed"), speed, false, 1, QStringLiteral("linkSpeed"));
     add(tr("Device class"), device.deviceClass);
     add(tr("Device subclass"), device.deviceSubclass);
     add(tr("Serial number"), device.serial);
@@ -552,10 +561,11 @@ void DeviceModel::rebuildFiltered()
         const auto bTransport = transportFlags(b);
         return (aTransport.first && bTransport.second) || (aTransport.second && bTransport.first);
     };
-    auto addDetail = [](Device &device, const QString &label, const QString &detail) {
+    auto addDetail = [](Device &device, const QString &label, const QString &detail, int level = 2) {
         if (!detail.isEmpty())
             device.details.append(QVariantMap{{QStringLiteral("label"), label},
-                                              {QStringLiteral("value"), detail}});
+                                              {QStringLiteral("value"), detail},
+                                              {QStringLiteral("detailLevel"), level}});
     };
     auto groupedHubName = [](const Device &usb2, const Device &usb3) {
         if (usefulIdentity(usb2.product) && usb2.product.compare(usb3.product, Qt::CaseInsensitive) == 0
@@ -637,12 +647,14 @@ void DeviceModel::rebuildFiltered()
         group.details.clear();
         if (group.reportedDownstreamPorts > 0)
             addDetail(group, QStringLiteral("Hub ports"), QString::number(group.reportedDownstreamPorts));
-        addDetail(group, QStringLiteral("USB 2 companion"), usb2.product);
+        addDetail(group, QStringLiteral("USB 2 companion"), usb2.product, 1);
+        addDetail(group, tr("USB 2 manufacturer"), usb2.manufacturer, 1);
         if (usb2.hubPortsTotal.toInt() > 0 && !usb2.hubPortsUsed.isEmpty())
             addDetail(group, QStringLiteral("USB 2 ports used"),
                       QStringLiteral("%1 / %2").arg(usb2.hubPortsUsed, usb2.hubPortsTotal));
         addDetail(group, QStringLiteral("USB 2 port"), usb2.portId);
-        addDetail(group, QStringLiteral("USB 3 companion"), usb3.product);
+        addDetail(group, QStringLiteral("USB 3 companion"), usb3.product, 1);
+        addDetail(group, tr("USB 3 manufacturer"), usb3.manufacturer, 1);
         if (usb3.hubPortsTotal.toInt() > 0 && !usb3.hubPortsUsed.isEmpty())
             addDetail(group, QStringLiteral("USB 3 ports used"),
                       QStringLiteral("%1 / %2").arg(usb3.hubPortsUsed, usb3.hubPortsTotal));

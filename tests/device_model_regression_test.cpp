@@ -138,6 +138,17 @@ static bool testDeviceInformation()
         || rows.value(QStringLiteral("Serial number")) != QStringLiteral("example-serial")) return false;
     const auto primary = sections.first().toMap().value(QStringLiteral("rows")).toList();
     if (primary.first().toMap().value(QStringLiteral("label")) != QStringLiteral("VID:PID")) return false;
+    for (const auto &row : primary) {
+        const auto detail = row.toMap();
+        const auto label = detail.value(QStringLiteral("label")).toString();
+        const bool standard = label == QLatin1String("VID:PID") || label == QLatin1String("Kernel driver")
+            || label == QLatin1String("Declared max USB current");
+        if (detail.value(QStringLiteral("detailLevel")).toInt() != (standard ? 0 : 1)) return false;
+        if (label == QLatin1String("USB version")
+            && detail.value(QStringLiteral("field")) != QStringLiteral("usbVersion")) return false;
+        if (label == QLatin1String("Negotiated link speed")
+            && detail.value(QStringLiteral("field")) != QStringLiteral("linkSpeed")) return false;
+    }
     bool hasDatabase = false;
     for (const auto &detail : role(model, 0, "details").toList()) {
         const auto label = detail.toMap().value(QStringLiteral("label")).toString();
@@ -146,9 +157,34 @@ static bool testDeviceInformation()
         if (rows.contains(label) || label == QLatin1String("USB link")
             || label == QLatin1String("Link speed") || label == QLatin1String("Max USB current")
             || label == QLatin1String("Driver") || label == QLatin1String("Serial")) return false;
+        const bool extended = label == QLatin1String("Raw product") || label == QLatin1String("Manufacturer")
+            || label == QLatin1String("Capable speed") || label == QLatin1String("Link status");
+        if (detail.toMap().value(QStringLiteral("detailLevel")).toInt() != (extended ? 1 : 2)) return false;
     }
     if (!hasDatabase || role(model, 0, "dataRateSummary") != QStringLiteral("Example diagnostic")
         || !role(model, 0, "dataRateWarning").toBool()) return false;
+
+    auto hasCapableSpeed = [&]() {
+        const auto details = role(model, 0, "details").toList();
+        return std::any_of(details.cbegin(), details.cend(), [](const QVariant &row) {
+            return row.toMap().value(QStringLiteral("label")) == QStringLiteral("Capable speed");
+        });
+    };
+    if (!hasCapableSpeed()) return false;
+    device[QStringLiteral("dataRate")] = QJsonObject{{QStringLiteral("capable_mbps"), 5000}};
+    load({device});
+    if (hasCapableSpeed()) return false; // Equal to the negotiated link, so redundant.
+    device[QStringLiteral("dataRate")] = QJsonObject{};
+    properties.append(QJsonArray{QStringLiteral("usb_capable_speed_mbps"), QStringLiteral("10000")});
+    device[QStringLiteral("properties")] = properties;
+    load({device});
+    if (!hasCapableSpeed()) return false; // Genuine, distinct property-only capability.
+    auto noNegotiated = device;
+    auto noNegotiatedUsb = noNegotiated.value(QStringLiteral("usb")).toObject();
+    noNegotiatedUsb[QStringLiteral("speed")] = 0;
+    noNegotiated[QStringLiteral("usb")] = noNegotiatedUsb;
+    load({noNegotiated});
+    if (hasCapableSpeed()) return false; // No known link to compare with.
 
     device[QStringLiteral("vendorId")] = QStringLiteral("0xABC");
     device[QStringLiteral("productId")] = QStringLiteral("0000");
