@@ -86,6 +86,8 @@ It updates `%global upstream_version`, converts the RPM Version to
 `0.1.0~dev.2`, resets Release to `1%{?dist}`, and synchronizes the CMake project
 VERSION with the numeric base (`0.1.0`). A dated English RPM changelog entry is
 prepended while old entries are preserved. Stable releases omit the RPM tilde.
+The applet's `KPlugin.Version` also receives the full upstream version, including
+the development suffix, so Plasma settings identify the installed release.
 
 For a packaging-only update instead:
 
@@ -99,7 +101,8 @@ and CMake file untouched. It prints no tag command, so the intended next step
 is a branch push for COPR rather than a new GitHub tag release.
 
 Both commands require a branch checkout and clean tracked target files.
-`prepare` checks the spec and CMake file; `rpm-bump` checks only the spec.
+`prepare` checks the spec, CMake file and applet metadata; `rpm-bump` checks only
+the spec.
 Unrelated staged or unstaged work is allowed and left alone. Invalid,
 non-increasing and duplicate upstream versions, existing local release tags,
 inconsistent version fields, and unexpected packaging layouts fail before any

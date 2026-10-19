@@ -2,6 +2,11 @@
 %global applet_id io.github._2crazy4nick.usbeekeeper
 %global qml_module io/github/_2crazy4nick/usbeekeeper
 
+# Qt's on-disk QML cache validates source timestamps, not source contents.
+# Clamping successive builds to the same changelog day can reuse obsolete QML.
+# Preserve the freshly assembled applet's mtimes; never delete user caches.
+%global clamp_mtime_to_source_date_epoch 0
+
 Name:           usbeekeeper
 Version:        0.1.0~dev.2
 Release:        1%{?dist}

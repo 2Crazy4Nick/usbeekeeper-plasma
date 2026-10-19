@@ -15,7 +15,7 @@
         "Id": "io.github._2crazy4nick.usbeekeeper",
         "License": "MIT",
         "Name": "USBeeKeeper",
-        "Version": "0.1.0",
+        "Version": "0.1.0-dev.2",
         "Website": "https://github.com/2Crazy4Nick/usbeekeeper-plasma",
         "BugReportUrl": "https://github.com/2Crazy4Nick/usbeekeeper-plasma/issues"
     },

@@ -4,6 +4,7 @@
 import argparse
 from dataclasses import dataclass
 from datetime import date
+import json
 import os
 from pathlib import Path
 import re
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NUMBER = r"(0|[1-9][0-9]*)"
 VERSION = re.compile(rf"{NUMBER}\.{NUMBER}\.{NUMBER}(?:-dev\.{NUMBER})?")
 CMAKE_VERSION = r"(^project\(usbeekeeper-plasma[ \t]+VERSION[ \t]+)([0-9.]+)(?=[ \t)])"
+METADATA_VERSION = r'^([ \t]*"Version"[ \t]*:[ \t]*")([^"\n]+)(")'
 
 
 class ReleaseError(ValueError):
@@ -197,7 +199,8 @@ def run(root, command, requested=None, today=None):
     root = root.resolve()
     spec_path = root / "usbeekeeper.spec"
     cmake_path = root / "CMakeLists.txt"
-    targets = [spec_path, cmake_path] if command == "prepare" else [spec_path]
+    metadata_path = root / "src/plasmoid/metadata.json"
+    targets = [spec_path, cmake_path, metadata_path] if command == "prepare" else [spec_path]
     require_clean(root, targets)
     branch = git(root, "symbolic-ref", "--quiet", "--short", "HEAD")
     if branch.returncode:
@@ -229,10 +232,20 @@ def run(root, command, requested=None, today=None):
         cmake = read_text(cmake_path)
         if field(cmake, CMAKE_VERSION, "CMake project VERSION")[2] != current.numeric:
             raise ReleaseError("CMake project VERSION does not match the current numeric base.")
+        metadata = read_text(metadata_path)
+        try:
+            plugin_version = json.loads(metadata)["KPlugin"]["Version"]
+        except (ValueError, KeyError, TypeError) as error:
+            raise ReleaseError("Expected KPlugin.Version in valid applet metadata.") from error
+        if plugin_version != current.upstream:
+            raise ReleaseError("KPlugin.Version does not match the current upstream version.")
         originals[cmake_path] = cmake
+        originals[metadata_path] = metadata
         updated_cmake = replace_value(cmake, CMAKE_VERSION, version.numeric, "CMake project VERSION")
         if updated_cmake != cmake:
             changes[cmake_path] = updated_cmake
+        changes[metadata_path] = replace_value(metadata, METADATA_VERSION, version.upstream,
+                                               "KPlugin.Version")
         spec = replace_value(spec, UPSTREAM_FIELD, version.upstream, "upstream_version")
         spec = replace_value(spec, RPM_FIELD, version.rpm, "RPM Version")
         release = 1

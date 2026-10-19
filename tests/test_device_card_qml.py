@@ -1,7 +1,9 @@
 """Check the actual DeviceCard layout when the Qt/Plasma QML runtime is available."""
 
 import os
+import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -9,6 +11,27 @@ import unittest
 
 
 class DeviceCardQmlTests(unittest.TestCase):
+    def test_applet_metadata_has_full_upstream_version(self):
+        root = Path(__file__).resolve().parents[1]
+        upstream = re.search(r"(?m)^%global upstream_version (\S+)$",
+                             (root / "usbeekeeper.spec").read_text())[1]
+        metadata = json.loads((root / "src/plasmoid/metadata.json").read_text())
+        self.assertEqual(metadata["KPlugin"]["Version"], upstream)
+
+    @unittest.skipUnless(shutil.which("rpmspec"), "RPM tooling is unavailable")
+    def test_rpm_preserves_fresh_qml_timestamps(self):
+        root = Path(__file__).resolve().parents[1]
+        # Query the actual parsed spec policy, not a duplicated Python rule.
+        # Qt otherwise reuses old bytecode for different releases built with
+        # the same clamped changelog timestamp (the installed-widget failure).
+        with tempfile.TemporaryDirectory() as temporary:
+            spec = Path(temporary) / "usbeekeeper.spec"
+            spec.write_text((root / "usbeekeeper.spec").read_text()
+                            + "\n%{echo:QML_MTIME_CLAMP=%{clamp_mtime_to_source_date_epoch}}\n")
+            result = subprocess.run(["rpmspec", "-P", str(spec)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("QML_MTIME_CLAMP=0", result.stdout + result.stderr)
+
     def test_expanded_information_at_wide_and_narrow_tree_widths(self):
         qtpaths = shutil.which("qtpaths6")
         if not qtpaths:

@@ -3,6 +3,7 @@
 import contextlib
 from datetime import date
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -35,6 +36,7 @@ Source0:        %{url}/archive/refs/tags/v%{upstream_version}.tar.gz#/%{name}-%{
 - Previous upstream release.
 """
 CMAKE = "project(usbeekeeper-plasma VERSION 0.1.0 LANGUAGES CXX)\n# Unrelated content.\n"
+METADATA = '{\n    "KPlugin": {\n        "Version": "0.1.0-dev.1"\n    }\n}\n'
 TODAY = date(2026, 10, 18)
 
 
@@ -70,6 +72,9 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.spec = self.root / "usbeekeeper.spec"
         self.cmake = self.root / "CMakeLists.txt"
+        self.metadata = self.root / "src/plasmoid/metadata.json"
+        self.metadata.parent.mkdir(parents=True)
+        self.metadata.write_text(METADATA)
         self.spec.write_text(SPEC)
         self.cmake.write_text(CMAKE)
         # Use the real integrations rather than replacing them with permissive test stubs.
@@ -116,15 +121,18 @@ class ReleaseTests(unittest.TestCase):
         old_history = SPEC.split("%changelog\n", 1)[1]
         self.assertTrue(text.endswith(old_history))
         self.assertEqual(self.cmake.read_text(), CMAKE)
+        self.assertEqual(json.loads(self.metadata.read_text())["KPlugin"]["Version"], "0.1.0-dev.2")
         self.assertEqual(self.git("rev-parse", "HEAD"), self.head)
         self.assertEqual(self.git("tag", "--list"), "")
 
     def test_numeric_base_change_and_stable_release(self):
         self.prepare("0.2.0-dev.1")
         self.assertIn("VERSION 0.2.0 LANGUAGES", self.cmake.read_text())
+        self.assertEqual(json.loads(self.metadata.read_text())["KPlugin"]["Version"], "0.2.0-dev.1")
         self.assertIn("# Unrelated content.", self.cmake.read_text())
         self.commit_fixture()
         self.prepare("0.2.0")
+        self.assertEqual(json.loads(self.metadata.read_text())["KPlugin"]["Version"], "0.2.0")
         self.assertIn("Version:        0.2.0\n", self.spec.read_text())
         self.assertIn("- Prepare release 0.2.0.", self.spec.read_text())
         self.commit_fixture()
@@ -144,6 +152,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("%global upstream_version 0.1.0-dev.1\n", text)
         self.assertIn("Version:        0.1.0~dev.1\n", text)
         self.assertIn("Release:        3%{?dist}\n", text)
+        self.assertEqual(self.metadata.read_text(), METADATA)
         self.assertIn("USBeeKeeper contributors - 0.1.0~dev.1-3\n", text)
         self.assertEqual(self.cmake.read_text(), CMAKE)
         self.assertIn("git add -- usbeekeeper.spec", output)
@@ -167,6 +176,16 @@ class ReleaseTests(unittest.TestCase):
                 # Reset only the disposable fixture for the next independent case.
                 self.spec.write_text(SPEC)
                 self.cmake.write_text(CMAKE)
+                self.metadata.write_text(METADATA)
+
+    def test_prepare_refuses_dirty_or_inconsistent_applet_metadata(self):
+        self.metadata.write_text(METADATA + "\n")
+        self.assertEqual(self.invoke("prepare", "0.1.0-dev.2")[0], 1)
+        self.assertEqual(self.spec.read_text(), SPEC)
+        self.metadata.write_text(METADATA.replace("dev.1", "dev.9"))
+        self.commit_fixture()
+        self.assertEqual(self.invoke("prepare", "0.1.0-dev.2")[0], 1)
+        self.assertEqual(self.spec.read_text(), SPEC)
 
     def test_invalid_equal_or_lower_versions_do_not_write(self):
         for value in ("0.1.0-dev.1", "0.1.0-dev.0", "0.0.9", "v0.2.0", "0.2.0\n"):
@@ -261,22 +280,25 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.invoke("prepare", "0.1.0-dev.2")[0], 1)
         self.assertEqual(self.spec.read_text(), SPEC)
 
-    def test_second_replace_failure_restores_both_targets(self):
+    def test_replace_failure_restores_all_targets(self):
         original_replace = release.os.replace
-        calls = 0
+        for fail_at in (2, 3):
+            calls = 0
 
-        def fail_second(source, destination):
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                raise OSError("Injected write failure")
-            return original_replace(source, destination)
+            def fail_replace(source, destination):
+                nonlocal calls
+                calls += 1
+                if calls == fail_at:
+                    raise OSError("Injected write failure")
+                return original_replace(source, destination)
 
-        with mock.patch.object(release.os, "replace", side_effect=fail_second):
-            self.assertEqual(self.invoke("prepare", "0.2.0-dev.1")[0], 1)
-        self.assertEqual(self.spec.read_text(), SPEC)
-        self.assertEqual(self.cmake.read_text(), CMAKE)
-        self.assertEqual(list(self.root.glob(".*.release-*")), [])
+            with self.subTest(fail_at=fail_at), \
+                    mock.patch.object(release.os, "replace", side_effect=fail_replace):
+                self.assertEqual(self.invoke("prepare", "0.2.0-dev.1")[0], 1)
+            self.assertEqual(self.spec.read_text(), SPEC)
+            self.assertEqual(self.cmake.read_text(), CMAKE)
+            self.assertEqual(self.metadata.read_text(), METADATA)
+            self.assertEqual(list(self.root.rglob(".*.release-*")), [])
 
     def test_edit_during_preparation_is_preserved(self):
         original_check = release.require_clean
