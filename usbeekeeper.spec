@@ -9,7 +9,7 @@
 
 Name:           usbeekeeper
 Version:        0.1.0~dev.3
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        KDE Plasma USB inspection and topology widget
 
 License:        MIT
@@ -83,6 +83,9 @@ python3 tools/validate_profiles.py
 %{_qt6_qmldir}/%{qml_module}/
 
 %changelog
+* Tue Oct 20 2026 USBeeKeeper contributors - 0.1.0~dev.3-2
+- Packaging-only update; application version unchanged.
+
 * Mon Oct 19 2026 USBeeKeeper contributors - 0.1.0~dev.3-1
 - Prepare development release 0.1.0-dev.3.
 
