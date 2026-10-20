@@ -29,6 +29,7 @@ BuildRequires:  cmake(KF6I18n)
 BuildRequires:  cmake(KF6CoreAddons)
 BuildRequires:  cmake(KF6Package)
 BuildRequires:  cmake(Plasma)
+BuildRequires:  kf6-kcmutils
 BuildRequires:  python3
 
 # QML imports are not all visible to the ELF dependency generator.
