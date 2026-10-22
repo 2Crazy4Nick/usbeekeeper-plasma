@@ -139,6 +139,21 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(release.ReleaseError):
             self.prepare("0.2.0-dev.100")
 
+    def test_first_regular_release_then_next_development(self):
+        self.prepare("0.1.0-dev.3")
+        self.commit_fixture()
+        self.prepare("0.1.0")
+        self.assertIn("%global upstream_version 0.1.0\n", self.spec.read_text())
+        self.assertIn("Version:        0.1.0\nRelease:        1%{?dist}\n", self.spec.read_text())
+        self.assertEqual(json.loads(self.metadata.read_text())["KPlugin"]["Version"], "0.1.0")
+        self.assertEqual(self.cmake.read_text(), CMAKE)
+        self.assertIn("- Prepare release 0.1.0.\n", self.spec.read_text())
+        self.commit_fixture()
+        self.prepare("0.1.1-dev.1")
+        self.assertIn("Version:        0.1.1~dev.1\nRelease:        1%{?dist}\n", self.spec.read_text())
+        self.assertEqual(json.loads(self.metadata.read_text())["KPlugin"]["Version"], "0.1.1-dev.1")
+        self.assertIn("VERSION 0.1.1 LANGUAGES", self.cmake.read_text())
+
     def test_numeric_development_counter(self):
         self.prepare("0.1.0-dev.2")
         self.commit_fixture()

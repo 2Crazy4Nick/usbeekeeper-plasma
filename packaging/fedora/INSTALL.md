@@ -1,4 +1,4 @@
-# Fedora RPM
+# Fedora KDE installation and RPM packaging
 
 The `usbeekeeper` RPM contains both the Plasma applet and its native QML
 plugin. No archive extraction or QML_IMPORT_PATH setting is needed.
@@ -10,10 +10,12 @@ unverified usbeehive package name.
 
 ## Install, update, remove
 
-Download an RPM built for your Fedora release and architecture, then run:
+The recommended method is the
+[USBeeKeeper COPR](https://copr.fedorainfracloud.org/coprs/2crazy4nick/usbeekeeper/):
 
 ```bash
-sudo dnf install ./usbeekeeper-*.rpm
+sudo dnf copr enable 2crazy4nick/usbeekeeper
+sudo dnf install usbeekeeper
 usbeekeeper-check-installation
 ```
 
@@ -21,14 +23,27 @@ Run the checker as your desktop user, without sudo. Add **USBeeKeeper** from
 Plasma's Add Widgets menu. Log out and back in after upgrading a loaded native
 plugin so Plasma loads the new library.
 
-For a newer downloaded RPM, use the same `sudo dnf install ./<new-rpm>.rpm`
-command. Once an actual COPR repository is available and enabled, normal
-`sudo dnf upgrade usbeekeeper` will update the package. No COPR repository is
-created or assumed by this packaging.
+Update using your normal Fedora package updater, or run:
+
+```bash
+sudo dnf upgrade usbeekeeper
+```
+
+The regular `0.1.0` version sorts newer than `0.1.0~dev.3`. COPR-delivered
+development-package installation and updates have been tested on Fedora KDE.
+Build availability depends on the COPR's enabled Fedora release/architecture.
 
 Remove it with `sudo dnf remove usbeekeeper`. The RPM owns no files in home
 directories and has no install/uninstall scripts that edit user settings.
 Plasma settings and physical aliases are retained.
+
+### Standalone RPM — secondary method
+
+If not using COPR, download an RPM built for your Fedora release and
+architecture, then run `sudo dnf install ./<downloaded-usbeekeeper-rpm>.rpm`.
+Use the same command with a newer RPM to upgrade. Do not install debug RPMs
+unless investigating a crash. Manual archives and source installation are
+also available as [advanced methods](../../README.md#advancedmanual-installation).
 
 ## Previous manual installations
 
@@ -63,17 +78,18 @@ The legacy core/CLI is disabled with `BUILD_LEGACY_CLI=OFF`. Other builds keep
 their existing default and the existing release archives are unaffected.
 The profile validator and CTest suite run during the RPM build.
 
-For the initial development release, the spec maps Git tag `v0.1.0-dev.1` to
-RPM Version `0.1.0~dev.1`, Release `1%{?dist}`. The tilde makes the development
-version older than stable `0.1.0`. Use the release preparation tool below to
-maintain the version fields and RPM changelog together.
+For regular release `v0.1.0`, the spec uses RPM Version `0.1.0`, Release
+`1%{?dist}`. Development versions use a tilde, for example `0.1.1-dev.1`
+becomes `0.1.1~dev.1`, so they sort before the corresponding regular release.
+Use the release preparation tool below to maintain version fields and the
+RPM changelog together.
 
 ### Prepare a release or packaging update
 
 From a Git checkout with Python 3 and Git available:
 
 ```bash
-python3 tools/release.py prepare 0.1.0-dev.2
+python3 tools/release.py prepare 0.1.1-dev.1
 ```
 
 `prepare` accepts canonical `X.Y.Z` and `X.Y.Z-dev.N` versions, without a `v`
@@ -82,9 +98,9 @@ and build metadata are rejected. The requested version must be greater than
 the current upstream version: `dev.10` follows `dev.2`, and stable `0.1.0`
 follows every `0.1.0-dev.N`.
 
-It updates `%global upstream_version`, converts the RPM Version to
-`0.1.0~dev.2`, resets Release to `1%{?dist}`, and synchronizes the CMake project
-VERSION with the numeric base (`0.1.0`). A dated English RPM changelog entry is
+It updates `%global upstream_version`, converts the example RPM Version to
+`0.1.1~dev.1`, resets Release to `1%{?dist}`, and synchronizes the CMake project
+VERSION with the numeric base (`0.1.1`). A dated English RPM changelog entry is
 prepended while old entries are preserved. Stable releases omit the RPM tilde.
 The applet's `KPlugin.Version` also receives the full upstream version, including
 the development suffix, so Plasma settings identify the installed release.
@@ -118,6 +134,17 @@ commands, but runs none of them. Suggested commits use `--only` to avoid
 including unrelated staged changes. Review the diff and remote state before
 executing those commands. No application behavior or daemon is changed, and
 no external Python dependencies are needed.
+
+For **every** regular or development GitHub tag, add a matching release-notes
+file, for example `releases/v0.1.0.md` or `releases/v0.1.1-dev.1.md`. The tag
+workflow checks that `releases/<tag>.md` is non-empty before building, then
+passes that file to the GitHub Release action. The Markdown is used verbatim:
+write actual asset filenames and links, not GitHub Actions expressions inside
+the notes. Tags containing `-` remain prereleases; `v0.1.0` is a regular release.
+Review and commit the metadata, notes and any workflow/documentation changes
+together before manually creating a tag. The tool's printed commands only
+cover the version files; they do not automatically include release notes.
+Preparing metadata does not create a tag, GitHub Release or COPR build.
 
 Tests are discovered by the existing CTest Python suite, or run them directly:
 
@@ -154,8 +181,9 @@ gets its own target Fedora suffix from the unchanged spec.
 
 ### Exact COPR package settings
 
-Create a COPR project manually and enable `fedora-43-x86_64` and
-`fedora-44-x86_64`. Add an SCM package with these settings:
+The published project is `2crazy4nick/usbeekeeper`. Maintainers configuring or
+reproducing the SCM setup can enable `fedora-43-x86_64` and
+`fedora-44-x86_64` and use these package settings:
 
 | Setting | Value |
 |---|---|
@@ -169,8 +197,8 @@ Create a COPR project manually and enable `fedora-43-x86_64` and
 | SRPM build method | `make srpm` |
 
 For a reproducible release build, replace `main` with a published tag or
-commit containing `.copr/Makefile`, such as `v0.1.0-dev.1` once that tag exists
-and includes this packaging. Older tags without the Makefile cannot use this
+commit containing `.copr/Makefile`, such as `v0.1.0` after publication.
+Older tags without the Makefile cannot use this
 method. The repository and selected commit must be publicly readable by COPR.
 After these changes have been committed and pushed by a maintainer, request a
 build in the COPR UI; no manual SRPM upload is required.
@@ -184,7 +212,8 @@ is no need to add the full Qt/KDE toolchain to the SCM source environment.
 
 Binary-build dependencies are resolved from `usbeekeeper.spec` in each target
 buildroot: `gcc-c++`, `cmake`, `cmake-rpm-macros`, `extra-cmake-modules`,
-`qt6-rpm-macros`, `python3`, and the CMake capabilities `Qt6Core`, `Qt6DBus`,
+`qt6-rpm-macros`, `kf6-kcmutils` (needed by QML settings tests), `python3`,
+and the CMake capabilities `Qt6Core`, `Qt6DBus`,
 `Qt6Qml`, `Qt6Quick`, `KF6I18n`, `KF6CoreAddons`, `KF6Package` and `Plasma`.
 The existing runtime dependencies and external usbeehived prerequisite remain
 unchanged. COPR needs no custom dependency repository for the build itself.
@@ -196,9 +225,11 @@ a changed RPM. Rebuilding a newer `main` commit with the
 same RPM version/release is not a normal DNF upgrade. No automatic Git snapshot
 versioning policy is introduced.
 
-COPR project creation, package configuration, build requests and any optional
-webhook setup are manual. No account credentials or webhook secrets belong in
-this repository, and this packaging does not create or publish a COPR project.
+COPR project/package administration and GitHub webhook configuration remain
+maintainer tasks outside this repository. No account credentials or webhook
+secrets belong here. Source/build scripts do not create a project, publish a
+package or configure webhooks; the existing project delivers updates through
+the enabled Fedora repository.
 
 ### Rebuild and validate
 
@@ -206,7 +237,7 @@ If Mock is already available, test the generated source RPM with:
 
 ```bash
 mock -r fedora-44-x86_64 --rebuild \
-    build/copr/usbeekeeper-0.1.0~dev.1-1.src.rpm \
+    build/copr/usbeekeeper-0.1.0-1.src.rpm \
     --resultdir "$PWD/build/mock-fedora44"
 ```
 

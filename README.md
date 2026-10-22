@@ -15,10 +15,46 @@ now USBeeKeeper and no longer uses that backend.
 
 ## Status
 
-This is an active development project and an initial public development
-baseline, not a stable release. The usbeehive-backed plasmoid has been tested
-with live USB devices and hotplug events, but interfaces, profiles, and UI
-details may still change.
+**v0.1.0 is the first regular release.** It promotes the functionality tested
+in the installed Fedora COPR `0.1.0-dev.3` packages, including device details,
+detail-level settings, renaming controls, hotplug and package updates. See the
+[v0.1.0 release notes](releases/v0.1.0.md).
+
+USBeeKeeper remains a small, actively developed USB inspector. Available data
+depends on usbeehive and the hardware; a regular release does not imply full
+USB/Type-C diagnostics or comprehensive physical-device identification.
+
+## Install on Fedora KDE — recommended
+
+Install and start `usbeehived` separately. Then enable the
+[USBeeKeeper COPR](https://copr.fedorainfracloud.org/coprs/2crazy4nick/usbeekeeper/)
+and install the package:
+
+```bash
+sudo dnf copr enable 2crazy4nick/usbeekeeper
+sudo dnf install usbeekeeper
+usbeekeeper-check-installation
+```
+
+The RPM installs both the applet and native QML plugin together; no manual
+extraction or QML import-path setup is needed. Run the conflict checker without
+sudo, then add USBeeKeeper through Plasma's **Add Widgets** menu.
+
+Update through your normal Fedora package updater or:
+
+```bash
+sudo dnf upgrade usbeekeeper
+```
+
+Log out and back in after upgrading a loaded native plugin. The regular
+`0.1.0` RPM sorts newer than `0.1.0~dev.3`; upgrades preserve widget settings
+and physical aliases. The separate daemon must provide
+`org.usbeehive.Devices5` on the session D-Bus. USBeeKeeper does not bundle,
+start, build or modify it.
+
+See [Fedora installation and RPM builds](packaging/fedora/INSTALL.md) for local
+copy conflicts, uninstall behavior, standalone RPMs and maintainer COPR setup.
+Other installation methods are [advanced/manual](#advancedmanual-installation).
 
 ## Architecture
 
@@ -48,14 +84,20 @@ relationship is unclassified—it is not automatically considered external.
 
 ## Features
 
-- USB identity, descriptor, driver, power, and negotiated link information.
+- USB identity, descriptor, kernel driver, declared current and negotiated link
+  information. Declared USB current in mA is **not live power consumption**.
+- Standard/Extended/Debug detail levels, with wrapped technical information
+  and no repeated USB version/link-speed rows already present in the header.
 - Data-rate capability summaries and warnings supplied by usbeehive.
 - Verified USB 2/USB 3 companion-hub grouping.
-- Optional depth-first USB topology tree with logical port annotations.
+- Optional depth-first USB topology tree, with logical port information in
+  Debug details.
 - Declarative physical-device profiles for evidence-based compositions.
 - Integrated-function annotations without hiding enumerated USB devices.
 - Persistent user-defined names for physical devices when a usable instance
   identity is available.
+- Per-widget Plasma settings for hubs, tree view, detail levels, empty USB-C
+  ports where available, and optional physical-device renaming controls.
 - Manual refresh and automatic refresh through D-Bus change signals; no
   periodic polling.
 
@@ -76,10 +118,10 @@ validation, and libudev development files for the legacy core/CLI.
 Example Fedora development dependencies:
 
 ```bash
-sudo dnf install gcc-c++ cmake extra-cmake-modules \
+sudo dnf install git gcc-c++ cmake extra-cmake-modules \
     qt6-qtbase-devel qt6-qtdeclarative-devel \
     kf6-kirigami-devel kf6-ki18n-devel kf6-kcoreaddons-devel \
-    kf6-kpackage-devel libplasma-devel plasma-workspace-devel \
+    kf6-kpackage-devel kf6-kcmutils libplasma-devel plasma-workspace-devel \
     systemd-devel python3
 ```
 
@@ -114,25 +156,7 @@ plasmoidviewer -a "$PWD/build/pkg/io.github._2crazy4nick.usbeekeeper"
 a valid test of persistence across host restarts; alias persistence must also
 be tested with an installed Plasma applet instance.
 
-## Installation
-
-### Fedora RPM
-
-The `usbeekeeper` RPM installs both the applet and native QML plugin together:
-
-```bash
-sudo dnf install ./usbeekeeper-<version>.<architecture>.rpm
-usbeekeeper-check-installation
-```
-
-Install and run `usbeehived` separately; it must provide
-`org.usbeehive.Devices5` on the session D-Bus. Run the conflict checker without
-sudo, then add USBeeKeeper through Plasma's Add Widgets menu. Install a newer
-RPM with the same DNF command to upgrade; log out and back in to reload a
-previously loaded plugin. No COPR repository is published yet.
-
-See [Fedora installation and RPM builds](packaging/fedora/INSTALL.md) for local
-copy conflicts, uninstall behavior, and future COPR preparation.
+## Advanced/manual installation
 
 Both runtime pieces are required:
 
@@ -210,6 +234,26 @@ For a persistent desktop installation, the same import path must be exported
 to the Plasma session before `plasmashell` starts. Exporting it only in a later
 terminal does not affect the running shell.
 
+## Plasma settings
+
+- **Show USB hubs** defaults to off. Enable it to include hubs.
+- **Show as topology tree** is available when hubs are shown; otherwise the
+  list remains flat.
+- **Device information detail level** defaults to **Standard**: VID:PID,
+  kernel driver and declared max USB current. **Extended** adds available
+  manufacturer/product, class/subclass, serial, power source, distinct capable
+  speed and Alternate Mode information. **Debug** adds database, logical-port,
+  companion, hub and other low-level details.
+- **Show physical device renaming controls** defaults to off. Enable it to
+  name, rename or clear a physical alias. Hiding the controls preserves saved
+  aliases and their display; it does not hide Integrated USB device cards.
+- **Show empty USB-C ports** only exposes entries available in the snapshot.
+
+Settings are per widget. Applying detail/renaming settings updates expanded
+cards without restarting the daemon. USB version remains accessible in
+Extended/Debug when it is not in the header, including companion-function
+versions. Negotiated link speeds are not repeated in the expanded tables.
+
 ## Physical-device profiles
 
 Profiles are strict, versioned JSON files in `src/plasmoid/profiles/`, with one
@@ -241,16 +285,19 @@ contribution rules. Manual user relationship overrides do not exist yet.
   by the device. Serial and container identities can survive relocation;
   topology fallback aliases are tied to an attachment location and are
   explicitly nonportable.
-- Alias persistence has been exercised in development, but persistence across
-  restarts still needs verification in a real installed Plasma session;
-  `plasmoidviewer` configuration is transient.
-- Tests cover model and request-sequencing behavior, but there is no complete
+- Installed Fedora COPR operation and updates have been tested. Systematic
+  alias-persistence testing across installed Plasma session restarts remains
+  limited; `plasmoidviewer` configuration is transient.
+- Tests cover profile validation/matching, model and request sequencing,
+  General settings, and real-plugin QML delegates/layouts. There is no complete
   fake D-Bus service integration harness for daemon owner transitions.
 - Physical profiles describe known structures conservatively and do not imply
   a retail product identity unless the available evidence supports one.
 - The legacy CLI and Type-C/sysfs implementation are separate from the
   usbeehive plasmoid and are not presented as fully validated current
   functionality.
+- Review Debug details and screenshots before sharing: they can contain
+  serial numbers or other unique hardware identifiers.
 
 ## Legacy CLI
 
